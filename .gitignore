@@ -7,6 +7,10 @@ coverage
 .vite
 .turbo
 *.tsbuildinfo
+var/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
 apps/web/node_modules
 apps/api/node_modules
 tools/media-importer/node_modules
