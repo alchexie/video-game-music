@@ -38,7 +38,7 @@ const imgError = ref(false)
 
 <style scoped>
 .series-card-cover {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%);
+  background: linear-gradient(135deg, #5c6d90 0%, #4a5c80 40%, #354d73 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -58,6 +58,6 @@ const imgError = ref(false)
   justify-content: center;
   width: 100%;
   height: 100%;
-  color: #e8e8e8;
+  color: #c8d4e8;
 }
 </style>

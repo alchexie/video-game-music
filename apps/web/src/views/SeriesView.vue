@@ -86,11 +86,11 @@ const heroLogoError = ref(false)
 
 <style scoped>
 .series-hero-cover {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%);
+  background: linear-gradient(135deg, #5c6d90 0%, #4a5c80 40%, #354d73 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #e8e8e8;
+  color: #c8d4e8;
   overflow: hidden;
 }
 
