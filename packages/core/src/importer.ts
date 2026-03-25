@@ -8,7 +8,15 @@ import mime from 'mime-types';
 import { parseFile } from 'music-metadata';
 import { v7 as uuidv7 } from 'uuid';
 
-import type { AlbumRecord, ImportOptions, LibraryScanSummary, MediaAssetRecord, SourceMeta, TrackRecord } from '@vgm/shared';
+import type {
+  AlbumRecord,
+  ImportOptions,
+  ImportProgressEvent,
+  LibraryScanSummary,
+  MediaAssetRecord,
+  SourceMeta,
+  TrackRecord,
+} from '@vgm/shared';
 import {
   SUPPORTED_AUDIO_EXTENSIONS,
   SUPPORTED_COVER_EXTENSIONS,
@@ -60,15 +68,53 @@ interface ScanInternalResult {
   candidates: ScannedCandidate[];
 }
 
+interface ProgressReporter {
+  onProgress?: (event: ImportProgressEvent) => void;
+  onImportProgress?: (event: ImportProgressEvent) => void;
+}
+
+function reportProgress(
+  options: ProgressReporter | undefined,
+  event: ImportProgressEvent,
+) {
+  options?.onProgress?.(event);
+  options?.onImportProgress?.(event);
+}
+
 export async function scanLibrary(context: DatabaseContext, options: ImportOptions): Promise<ScanInternalResult> {
-  const files = await walkAudioFiles(options.libraryRoot);
+  const startedAt = Date.now();
+  reportProgress(options, {
+    phase: 'discover',
+    message: `开始扫描目录：${options.libraryRoot}`,
+    elapsedMs: 0,
+  });
+
+  const files = await walkAudioFiles(options.libraryRoot, options, { discovered: 0 });
+  reportProgress(options, {
+    phase: 'discover',
+    message: `目录扫描完成，发现 ${files.length} 个音频文件`,
+    processed: files.length,
+    total: files.length,
+    elapsedMs: Date.now() - startedAt,
+  });
+
   const candidates: ScannedCandidate[] = [];
   const existingAssets = all<Record<string, unknown>>(context, 'SELECT * FROM mediaAssets').map(mapMediaAsset);
   const existingMap = new Map(existingAssets.map((asset) => [asset.sourceKey, asset]));
 
-  for (const absolutePath of files) {
+  for (const [index, absolutePath] of files.entries()) {
     const candidate = await buildCandidate(options.libraryRoot, absolutePath);
     candidates.push(candidate);
+
+    if ((index + 1) % 25 === 0 || index === files.length - 1) {
+      reportProgress(options, {
+        phase: 'metadata',
+        message: `正在读取标签与封面：${index + 1}/${files.length}`,
+        processed: index + 1,
+        total: files.length,
+        elapsedMs: Date.now() - startedAt,
+      });
+    }
   }
 
   const seenSourceKeys = new Set(candidates.map((candidate) => candidate.sourceKey));
@@ -128,14 +174,24 @@ export async function scanLibrary(context: DatabaseContext, options: ImportOptio
     changes,
   };
 
+  reportProgress(options, {
+    phase: 'done',
+    message: `扫描完成：${summary.totals.files} 个文件，新增 ${summary.totals.newFiles}，更新 ${summary.totals.updatedFiles}，缺失 ${summary.totals.missingFiles}`,
+    processed: summary.totals.files,
+    total: summary.totals.files,
+    elapsedMs: Date.now() - startedAt,
+  });
+
   return { summary, candidates };
 }
 
 export async function commitLibrary(context: DatabaseContext, config: AppConfig) {
+  const startedAt = Date.now();
   await ensureCacheDirs(config.mediaCacheDir);
   const scan = await scanLibrary(context, {
     libraryRoot: config.libraryRoot,
     cacheDir: config.mediaCacheDir,
+    onProgress: config.onImportProgress,
   });
 
   const existingAssets = all<Record<string, unknown>>(context, 'SELECT * FROM mediaAssets').map(mapMediaAsset);
@@ -144,7 +200,15 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
   const trackMap = new Map(existingTracks.map((track) => [track.mediaAssetId, track]));
   const now = new Date().toISOString();
 
-  for (const candidate of scan.candidates) {
+  reportProgress(config, {
+    phase: 'write',
+    message: `开始写入数据库与封面缓存，共 ${scan.candidates.length} 个文件`,
+    processed: 0,
+    total: scan.candidates.length,
+    elapsedMs: Date.now() - startedAt,
+  });
+
+  for (const [index, candidate] of scan.candidates.entries()) {
     const existingAsset = assetMap.get(candidate.sourceKey);
     const assetPublicId = existingAsset?.publicId ?? uuidv7();
     const unchanged = existingAsset?.fileSize === candidate.fileSize && existingAsset.modifiedAt === candidate.modifiedAt;
@@ -265,11 +329,29 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
       trackRecord.createdAt,
       trackRecord.updatedAt,
     ]);
+
+    if ((index + 1) % 25 === 0 || index === scan.candidates.length - 1) {
+      reportProgress(config, {
+        phase: 'write',
+        message: `已写入 ${index + 1}/${scan.candidates.length} 个文件`,
+        processed: index + 1,
+        total: scan.candidates.length,
+        elapsedMs: Date.now() - startedAt,
+      });
+    }
   }
 
   const activeSourceKeys = new Set(scan.candidates.map((candidate) => candidate.sourceKey));
   const missingAssets = existingAssets.filter((asset) => !activeSourceKeys.has(asset.sourceKey) && asset.presenceStatus === 'active');
   if (missingAssets.length > 0) {
+    reportProgress(config, {
+      phase: 'write',
+      message: `标记 ${missingAssets.length} 个缺失文件`,
+      processed: missingAssets.length,
+      total: missingAssets.length,
+      elapsedMs: Date.now() - startedAt,
+    });
+
     for (const asset of missingAssets) {
       run(context, `
         UPDATE mediaAssets
@@ -279,12 +361,28 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
     }
   }
 
-  await rebuildAlbums(context);
+  reportProgress(config, {
+    phase: 'rebuild',
+    message: '开始重建系统专辑集合',
+    elapsedMs: Date.now() - startedAt,
+  });
+
+  await rebuildAlbums(context, {
+    onProgress: config.onImportProgress,
+  });
+
+  reportProgress(config, {
+    phase: 'done',
+    message: `导入完成：${scan.summary.totals.files} 个文件`,
+    processed: scan.summary.totals.files,
+    total: scan.summary.totals.files,
+    elapsedMs: Date.now() - startedAt,
+  });
 
   return scan.summary;
 }
 
-async function rebuildAlbums(context: DatabaseContext) {
+async function rebuildAlbums(context: DatabaseContext, options?: Pick<ImportOptions, 'onProgress'>) {
   const tracks = all<Record<string, unknown>>(context, `SELECT * FROM tracks WHERE hidden = 0`).map(mapTrack);
   const assets = all<Record<string, unknown>>(context, `SELECT * FROM mediaAssets WHERE presenceStatus = 'active'`).map(mapMediaAsset);
   const existingAlbums = all<Record<string, unknown>>(context, `SELECT * FROM albums WHERE isSystemGenerated = 1`).map(mapAlbum);
@@ -370,6 +468,13 @@ async function rebuildAlbums(context: DatabaseContext) {
     });
   }
 
+  reportProgress(options, {
+    phase: 'rebuild',
+    message: `准备重建 ${albumDocs.length} 张专辑及 ${albumTrackDocs.length} 条专辑曲目关系`,
+    processed: albumDocs.length,
+    total: albumDocs.length,
+  });
+
   transaction(context, () => {
     run(context, `DELETE FROM albumTracks`);
     run(context, `DELETE FROM albums WHERE isSystemGenerated = 1`);
@@ -414,21 +519,40 @@ async function rebuildAlbums(context: DatabaseContext) {
       ]);
     }
   });
+
+  reportProgress(options, {
+    phase: 'rebuild',
+    message: `专辑重建完成：${albumDocs.length} 张专辑`,
+    processed: albumDocs.length,
+    total: albumDocs.length,
+  });
 }
 
-async function walkAudioFiles(root: string): Promise<string[]> {
+async function walkAudioFiles(
+  root: string,
+  options?: Pick<ImportOptions, 'onProgress'>,
+  progressState: { discovered: number } = { discovered: 0 },
+): Promise<string[]> {
   const entries = await fs.readdir(root, { withFileTypes: true });
   const files: string[] = [];
 
   for (const entry of entries) {
     const absolutePath = path.join(root, entry.name);
     if (entry.isDirectory()) {
-      files.push(...await walkAudioFiles(absolutePath));
+      files.push(...await walkAudioFiles(absolutePath, options, progressState));
       continue;
     }
 
     if (SUPPORTED_AUDIO_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
       files.push(absolutePath);
+      progressState.discovered += 1;
+      if (progressState.discovered % 200 === 0) {
+        reportProgress(options, {
+          phase: 'discover',
+          message: `已发现 ${progressState.discovered} 个音频文件`,
+          processed: progressState.discovered,
+        });
+      }
     }
   }
 

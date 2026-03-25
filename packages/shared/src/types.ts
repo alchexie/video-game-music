@@ -159,10 +159,19 @@ export interface LibraryScanSummary {
   changes: LibraryScanChange[];
 }
 
+export interface ImportProgressEvent {
+  phase: 'discover' | 'metadata' | 'write' | 'rebuild' | 'done';
+  message: string;
+  processed?: number;
+  total?: number;
+  elapsedMs?: number;
+}
+
 export interface ImportOptions {
   libraryRoot: string;
   cacheDir: string;
   includeHashes?: boolean;
+  onProgress?: (event: ImportProgressEvent) => void;
 }
 
 export interface SyncOptions {

@@ -17,7 +17,6 @@ import {
   patchTrack,
   resolveCoverAsset,
   resolveTrackStream,
-  scanLibrary,
   searchCatalog,
   syncMediaToCos,
 } from '@vgm/core';
@@ -32,6 +31,12 @@ import Fastify, { type FastifyReply } from 'fastify';
 import { v7 as uuidv7 } from 'uuid';
 
 const bytesPattern = /^bytes=(\d+)-(\d+)?$/;
+
+function formatImportProgress(event: import('@vgm/shared').ImportProgressEvent) {
+  const progress = event.total ? ` ${event.processed ?? 0}/${event.total}` : '';
+  const elapsed = typeof event.elapsedMs === 'number' ? ` (${Math.round(event.elapsedMs / 1000)}s)` : '';
+  return `[import:${event.phase}]${progress}${elapsed} ${event.message}`;
+}
 
 export async function createApp() {
   const config = loadConfig(process.env, process.cwd());
@@ -155,18 +160,12 @@ export async function createApp() {
     return searchCatalog(context, q);
   });
 
-  app.post('/api/admin/import/scan', async () => {
+  app.post('/api/admin/import/commit', async (request) => {
     const context = await getDatabase(config);
-    const result = await scanLibrary(context, {
-      libraryRoot: config.libraryRoot,
-      cacheDir: config.mediaCacheDir,
+    return commitLibrary(context, {
+      ...config,
+      onImportProgress: (event) => request.log.info(formatImportProgress(event)),
     });
-    return result.summary;
-  });
-
-  app.post('/api/admin/import/commit', async () => {
-    const context = await getDatabase(config);
-    return commitLibrary(context, config);
   });
 
   app.post('/api/admin/sync/cos', async () => {

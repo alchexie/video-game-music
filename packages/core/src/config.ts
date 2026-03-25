@@ -15,6 +15,7 @@ export interface AppConfig {
   cosSecretId?: string;
   cosSecretKey?: string;
   cosBasePrefix: string;
+  onImportProgress?: (event: import('@vgm/shared').ImportProgressEvent) => void;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()): AppConfig {

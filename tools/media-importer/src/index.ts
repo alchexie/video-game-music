@@ -1,23 +1,21 @@
-import { closeDatabase, commitLibrary, getDatabase, loadConfig, loadWorkspaceEnv, scanLibrary } from '@vgm/core';
+import { closeDatabase, commitLibrary, getDatabase, loadConfig, loadWorkspaceEnv } from '@vgm/core';
 
-const command = process.argv[2] ?? 'scan';
 loadWorkspaceEnv(process.cwd());
 const config = loadConfig(process.env, process.cwd());
 
+function formatImportProgress(event: import('@vgm/shared').ImportProgressEvent) {
+  const progress = event.total ? ` ${event.processed ?? 0}/${event.total}` : '';
+  const elapsed = typeof event.elapsedMs === 'number' ? ` (${Math.round(event.elapsedMs / 1000)}s)` : '';
+  return `[import:${event.phase}]${progress}${elapsed} ${event.message}`;
+}
+
 async function main() {
   const context = await getDatabase(config);
-
-  if (command === 'commit') {
-    const summary = await commitLibrary(context, config);
-    console.log(JSON.stringify(summary, null, 2));
-    return;
-  }
-
-  const result = await scanLibrary(context, {
-    libraryRoot: config.libraryRoot,
-    cacheDir: config.mediaCacheDir,
+  const summary = await commitLibrary(context, {
+    ...config,
+    onImportProgress: (event) => console.log(formatImportProgress(event)),
   });
-  console.log(JSON.stringify(result.summary, null, 2));
+  console.log(JSON.stringify(summary, null, 2));
 }
 
 main()

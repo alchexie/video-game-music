@@ -55,11 +55,6 @@ export async function searchCatalog(query: string) {
   return data
 }
 
-export async function scanLibrary() {
-  const { data } = await api.post('/admin/import/scan')
-  return data
-}
-
 export async function commitLibrary() {
   const { data } = await api.post('/admin/import/commit')
   return data

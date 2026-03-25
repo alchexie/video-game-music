@@ -8,7 +8,6 @@ import {
   commitLibrary,
   createCollection,
   fetchCollections,
-  scanLibrary,
   searchCatalog,
   syncCos,
   type CollectionSummary,
@@ -38,14 +37,17 @@ async function loadCollections() {
   }
 }
 
-async function runAction(action: 'scan' | 'commit' | 'sync') {
+async function runAction(action: 'commit' | 'sync') {
   loading.value = true
+  jobResult.value = JSON.stringify({
+    status: 'running',
+    action,
+    message: '任务执行中，请查看 API 终端日志获取实时进度。',
+  }, null, 2)
   try {
-    const result = action === 'scan'
-      ? await scanLibrary()
-      : action === 'commit'
-        ? await commitLibrary()
-        : await syncCos()
+    const result = action === 'commit'
+      ? await commitLibrary()
+      : await syncCos()
     jobResult.value = JSON.stringify(result, null, 2)
     await loadCollections()
   } finally {
@@ -103,7 +105,7 @@ onMounted(() => {
     <div class="section-head">
       <div>
         <span class="eyebrow">管理后台</span>
-        <h1>导入、同步与歌单整理</h1>
+        <h1>入库、同步与歌单整理</h1>
       </div>
     </div>
 
@@ -123,7 +125,6 @@ onMounted(() => {
           <strong>资源任务</strong>
         </template>
         <div class="admin-actions">
-          <el-button :loading="loading" @click="runAction('scan')">扫描资源库</el-button>
           <el-button :loading="loading" type="primary" @click="runAction('commit')">执行入库</el-button>
           <el-button :loading="loading" type="success" @click="runAction('sync')">同步到 COS</el-button>
         </div>

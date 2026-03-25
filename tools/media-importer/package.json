@@ -4,7 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "scan": "tsx src/index.ts scan",
     "commit": "tsx src/index.ts commit",
     "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
