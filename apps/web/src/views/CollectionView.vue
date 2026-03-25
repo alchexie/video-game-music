@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { ElMessage } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
 
 import type { CollectionDetail } from '@vgm/shared'
 
@@ -20,7 +20,7 @@ async function loadCollection() {
     collection.value = await fetchCollection(route.params.id as string)
   } catch (error) {
     collection.value = undefined
-    loadError.value = 'Failed to load playlist data from the API.'
+    loadError.value = '歌单数据加载失败。'
     ElMessage.error(loadError.value)
     console.error(error)
   } finally {
@@ -55,28 +55,28 @@ const coverUrl = computed(() => (
       <section v-if="collection" class="detail-hero detail-hero--collection">
         <img v-if="collection.coverAssetId" class="detail-cover" :src="coverUrl" :alt="collection.title" />
         <div v-else class="detail-cover detail-cover--empty">
-          Mix
+          歌单
         </div>
 
         <div class="detail-copy">
-          <span class="eyebrow">Curated Playlist</span>
+          <span class="eyebrow">主题歌单</span>
           <h1>{{ collection.title }}</h1>
-          <p>{{ collection.description || 'A fixed playlist built from any source album.' }}</p>
-          <small>{{ collection.tracks.length }} tracks · {{ collection.status }}</small>
+          <p>{{ collection.description || '从不同来源曲目中人工整理出的固定歌单。' }}</p>
+          <small>{{ collection.tracks.length }} 首曲目 · {{ collection.status === 'published' ? '已发布' : '草稿' }}</small>
         </div>
       </section>
 
       <section v-if="collection" class="section-block">
         <div class="section-head">
           <div>
-            <span class="eyebrow">Playlist</span>
-            <h2>Tracks</h2>
+            <span class="eyebrow">歌单内容</span>
+            <h2>曲目列表</h2>
           </div>
         </div>
         <TrackTable :tracks="collection.tracks" :queue-label="collection.title" />
       </section>
 
-      <el-empty v-else-if="!loading && !loadError" description="Playlist not found." />
+      <el-empty v-else-if="!loading && !loadError" description="未找到该歌单。" />
     </template>
   </el-skeleton>
 </template>

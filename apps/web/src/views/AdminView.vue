@@ -102,52 +102,52 @@ onMounted(() => {
   <section class="section-block section-block--admin">
     <div class="section-head">
       <div>
-        <span class="eyebrow">Admin</span>
-        <h1>Import, sync, and curate</h1>
+        <span class="eyebrow">管理后台</span>
+        <h1>导入、同步与歌单整理</h1>
       </div>
     </div>
 
     <div class="admin-grid">
       <el-card shadow="never">
         <template #header>
-          <strong>Admin Token</strong>
+          <strong>管理令牌</strong>
         </template>
-        <el-input v-model="adminToken" placeholder="Optional x-admin-token" />
+        <el-input v-model="adminToken" placeholder="可选的 x-admin-token" />
         <el-button class="admin-action" type="primary" @click="saveToken">
-          Save Token
+          保存令牌
         </el-button>
       </el-card>
 
       <el-card shadow="never">
         <template #header>
-          <strong>Library Jobs</strong>
+          <strong>资源任务</strong>
         </template>
         <div class="admin-actions">
-          <el-button :loading="loading" @click="runAction('scan')">Scan Library</el-button>
-          <el-button :loading="loading" type="primary" @click="runAction('commit')">Commit Import</el-button>
-          <el-button :loading="loading" type="success" @click="runAction('sync')">Sync COS</el-button>
+          <el-button :loading="loading" @click="runAction('scan')">扫描资源库</el-button>
+          <el-button :loading="loading" type="primary" @click="runAction('commit')">执行入库</el-button>
+          <el-button :loading="loading" type="success" @click="runAction('sync')">同步到 COS</el-button>
         </div>
       </el-card>
 
       <el-card shadow="never">
         <template #header>
-          <strong>Create Playlist</strong>
+          <strong>创建歌单</strong>
         </template>
         <el-form label-position="top">
-          <el-form-item label="Title">
+          <el-form-item label="标题">
             <el-input v-model="createForm.title" />
           </el-form-item>
-          <el-form-item label="Description">
+          <el-form-item label="描述">
             <el-input v-model="createForm.description" type="textarea" :rows="3" />
           </el-form-item>
-          <el-form-item label="Status">
+          <el-form-item label="状态">
             <el-select v-model="createForm.status">
-              <el-option label="Draft" value="draft" />
-              <el-option label="Published" value="published" />
+              <el-option label="草稿" value="draft" />
+              <el-option label="已发布" value="published" />
             </el-select>
           </el-form-item>
           <el-button :loading="loading" type="primary" @click="submitCollection">
-            Create
+            创建
           </el-button>
         </el-form>
       </el-card>
@@ -157,13 +157,13 @@ onMounted(() => {
   <section class="section-block">
     <div class="section-head">
       <div>
-        <span class="eyebrow">Curated Playlists</span>
-        <h2>Add Tracks</h2>
+        <span class="eyebrow">主题歌单</span>
+        <h2>添加曲目</h2>
       </div>
     </div>
 
     <div class="admin-toolbar">
-      <el-select v-model="selectedCollectionId" placeholder="Select playlist">
+      <el-select v-model="selectedCollectionId" placeholder="选择歌单">
         <el-option
           v-for="collection in collections"
           :key="collection.publicId"
@@ -174,11 +174,11 @@ onMounted(() => {
 
       <el-input
         v-model="searchKeyword"
-        placeholder="Search tracks to add"
+        placeholder="搜索要加入歌单的曲目"
         @keyup.enter="runSearch"
       />
       <el-button type="primary" @click="runSearch">
-        Search
+        搜索
       </el-button>
     </div>
 
@@ -196,21 +196,21 @@ onMounted(() => {
         </span>
         <span class="track-side">
           <small>{{ track.artist }}</small>
-          <small>Add to playlist</small>
+          <small>加入歌单</small>
         </span>
       </button>
     </div>
 
-    <el-empty v-if="!searchResults.length" description="Search for tracks and add them to a playlist." />
+    <el-empty v-if="!searchResults.length" description="搜索曲目后可直接加入当前歌单。" />
   </section>
 
   <section class="section-block">
     <div class="section-head">
       <div>
-        <span class="eyebrow">Latest Result</span>
-        <h2>Job Output</h2>
+        <span class="eyebrow">最近结果</span>
+        <h2>任务输出</h2>
       </div>
     </div>
-    <pre class="admin-output">{{ jobResult || 'No job executed yet.' }}</pre>
+    <pre class="admin-output">{{ jobResult || '尚未执行任何任务。' }}</pre>
   </section>
 </template>

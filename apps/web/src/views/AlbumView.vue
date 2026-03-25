@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { ElMessage } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
 
 import type { AlbumDetail } from '@vgm/shared'
 
@@ -20,7 +20,7 @@ async function loadAlbum() {
     album.value = await fetchAlbum(route.params.id as string)
   } catch (error) {
     album.value = undefined
-    loadError.value = 'Failed to load album data from the API.'
+    loadError.value = '专辑数据加载失败。'
     ElMessage.error(loadError.value)
     console.error(error)
   } finally {
@@ -55,28 +55,28 @@ const coverUrl = computed(() => (
       <section v-if="album" class="detail-hero">
         <img v-if="album.coverAssetId" class="detail-cover" :src="coverUrl" :alt="album.title" />
         <div v-else class="detail-cover detail-cover--empty">
-          Album
+          专辑
         </div>
 
         <div class="detail-copy">
-          <span class="eyebrow">Album</span>
+          <span class="eyebrow">专辑</span>
           <h1>{{ album.title }}</h1>
-          <p>{{ album.albumArtist }} · {{ album.year ?? 'Unknown year' }}</p>
-          <small>{{ album.trackCount }} tracks across {{ album.discCount }} discs</small>
+          <p>{{ album.albumArtist }} · {{ album.year ?? '年份未知' }}</p>
+          <small>{{ album.trackCount }} 首曲目 · {{ album.discCount }} 张盘</small>
         </div>
       </section>
 
       <section v-if="album" class="section-block">
         <div class="section-head">
           <div>
-            <span class="eyebrow">Track List</span>
-            <h2>Disc Segments</h2>
+            <span class="eyebrow">曲目列表</span>
+            <h2>分盘浏览</h2>
           </div>
         </div>
         <TrackTable :tracks="album.tracks" :queue-label="album.title" group-by-disc />
       </section>
 
-      <el-empty v-else-if="!loading && !loadError" description="Album not found." />
+      <el-empty v-else-if="!loading && !loadError" description="未找到该专辑。" />
     </template>
   </el-skeleton>
 </template>

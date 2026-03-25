@@ -30,15 +30,15 @@ function submitSearch() {
   <div class="app-shell">
     <header class="site-header">
       <RouterLink class="brand" to="/">
-        <span class="brand-kicker">Video Game Music</span>
-        <strong class="brand-title">Archive Player</strong>
+        <span class="brand-kicker">电子游戏音乐</span>
+        <strong class="brand-title">曲库播放器</strong>
       </RouterLink>
 
       <div class="site-actions">
         <el-input
           v-model="search"
           class="site-search"
-          placeholder="Search albums and tracks"
+          placeholder="搜索专辑或曲目"
           @keyup.enter="submitSearch"
         >
           <template #prefix>
@@ -46,10 +46,10 @@ function submitSearch() {
           </template>
         </el-input>
         <el-button type="primary" plain @click="submitSearch">
-          Search
+          搜索
         </el-button>
         <RouterLink class="nav-link" :class="{ active: isAdminRoute }" to="/admin">
-          Admin
+          管理
         </RouterLink>
       </div>
     </header>

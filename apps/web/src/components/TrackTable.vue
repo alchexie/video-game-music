@@ -12,7 +12,7 @@ const props = withDefaults(defineProps<{
   queueLabel?: string
   groupByDisc?: boolean
 }>(), {
-  queueLabel: 'Queue',
+  queueLabel: '播放队列',
   groupByDisc: false,
 })
 
@@ -36,7 +36,7 @@ const groups = computed(() => {
 
   return [...map.entries()].map(([discNumber, tracks]) => ({
     key: `${discNumber}`,
-    title: tracks[0]?.discTitle || `Disc ${discNumber}`,
+    title: tracks[0]?.discTitle || `第 ${discNumber} 张盘`,
     tracks,
   }))
 })
@@ -50,7 +50,7 @@ function playTrack(index: number) {
   <div class="track-groups">
     <section v-for="group in groups" :key="group.key" class="track-group">
       <header v-if="group.title" class="track-group-header">
-        <span>Disc Segment</span>
+        <span>分盘</span>
         <strong>{{ group.title }}</strong>
       </header>
 

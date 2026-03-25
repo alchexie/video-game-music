@@ -25,8 +25,8 @@ const progress = computed(() => (
 
     <div class="player-track">
       <span class="player-context">{{ player.queueLabel }}</span>
-      <strong>{{ player.currentTrack?.title ?? 'Select a track to begin playback' }}</strong>
-      <span>{{ player.currentTrack?.artist ?? 'Local library or COS stream' }}</span>
+      <strong>{{ player.currentTrack?.title ?? '选择一首曲目开始播放' }}</strong>
+      <span>{{ player.currentTrack?.artist ?? '本地曲库或 COS 音频流' }}</span>
     </div>
 
     <div class="player-controls">

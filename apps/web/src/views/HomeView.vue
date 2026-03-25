@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { onMounted, ref } from 'vue'
 
+import type { AlbumListItem } from '@vgm/shared'
+
+import { fetchAlbums, fetchCollections, type CollectionSummary } from '../api/client'
 import AlbumCard from '../components/AlbumCard.vue'
 import CollectionCard from '../components/CollectionCard.vue'
-import { fetchAlbums, fetchCollections, type CollectionSummary } from '../api/client'
-import type { AlbumListItem } from '@vgm/shared'
 
 const loading = ref(true)
 const albums = ref<AlbumListItem[]>([])
@@ -23,7 +24,7 @@ onMounted(async () => {
     albums.value = albumData
     collections.value = collectionData
   } catch (error) {
-    loadError.value = 'API is unavailable. Confirm the backend dev server is running on 127.0.0.1:8787.'
+    loadError.value = 'API 当前不可用，请确认后端开发服务已运行在 127.0.0.1:8787。'
     ElMessage.error(loadError.value)
     console.error(error)
   } finally {
@@ -35,21 +36,21 @@ onMounted(async () => {
 <template>
   <section class="hero-panel">
     <div>
-      <span class="eyebrow">Local-first catalog</span>
-      <h1>Browse soundtrack albums, stream tracks, and keep the library ready for COS.</h1>
+      <span class="eyebrow">本地优先曲库</span>
+      <h1>浏览游戏音乐专辑，直接播放曲目，并随时为 COS 同步做好准备。</h1>
       <p>
-        The site reads your local library in development, groups tracks into system-generated albums,
-        and leaves room for curated cross-album playlists in the admin panel.
+        开发环境直接读取本地资源，按专辑自动聚合曲目；
+        管理后台则负责人工维护跨专辑主题歌单。
       </p>
     </div>
     <div class="hero-stats">
       <article>
         <strong>{{ albums.length }}</strong>
-        <span>Albums</span>
+        <span>专辑</span>
       </article>
       <article>
         <strong>{{ collections.length }}</strong>
-        <span>Curated Lists</span>
+        <span>主题歌单</span>
       </article>
     </div>
   </section>
@@ -73,10 +74,10 @@ onMounted(async () => {
       <section class="section-block">
         <div class="section-head">
           <div>
-            <span class="eyebrow">System Generated</span>
-            <h2>Album Collections</h2>
+            <span class="eyebrow">系统生成</span>
+            <h2>专辑集合</h2>
           </div>
-          <small>{{ albums.length }} total</small>
+          <small>共 {{ albums.length }} 张</small>
         </div>
         <div class="card-grid">
           <AlbumCard v-for="album in albums" :key="album.publicId" :album="album" />
@@ -86,8 +87,8 @@ onMounted(async () => {
       <section class="section-block">
         <div class="section-head">
           <div>
-            <span class="eyebrow">Curated</span>
-            <h2>Theme Playlists</h2>
+            <span class="eyebrow">人工整理</span>
+            <h2>主题歌单</h2>
           </div>
         </div>
         <div v-if="collections.length" class="card-grid card-grid--narrow">
@@ -97,7 +98,7 @@ onMounted(async () => {
             :collection="collection"
           />
         </div>
-        <el-empty v-else description="No curated playlists yet. Create one in Admin." />
+        <el-empty v-else description="还没有主题歌单，可在管理页创建。" />
       </section>
     </template>
   </el-skeleton>

@@ -3,11 +3,13 @@ import { computed, ref } from 'vue'
 
 import type { TrackListItem } from '@vgm/shared'
 
+const DEFAULT_QUEUE_LABEL = '\u64ad\u653e\u961f\u5217'
+
 export const usePlayerStore = defineStore('player', () => {
   const audio = ref<HTMLAudioElement | null>(null)
   const queue = ref<TrackListItem[]>([])
   const currentIndex = ref(-1)
-  const queueLabel = ref('Queue')
+  const queueLabel = ref(DEFAULT_QUEUE_LABEL)
   const isPlaying = ref(false)
   const currentTime = ref(0)
   const duration = ref(0)
@@ -44,7 +46,7 @@ export const usePlayerStore = defineStore('player', () => {
     await element.play()
   }
 
-  async function playQueue(inputQueue: TrackListItem[], index: number, label = 'Queue') {
+  async function playQueue(inputQueue: TrackListItem[], index: number, label = DEFAULT_QUEUE_LABEL) {
     queue.value = inputQueue
     queueLabel.value = label
     currentIndex.value = index

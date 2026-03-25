@@ -16,13 +16,13 @@ defineProps<{
           :alt="collection.title"
         />
         <div v-else class="cover-fallback">
-          Mix
+          歌单
         </div>
       </div>
       <div class="media-card-body">
         <strong>{{ collection.title }}</strong>
-        <span>{{ collection.description || 'Curated playlist' }}</span>
-        <small>{{ collection.trackCount }} tracks · {{ collection.status }}</small>
+        <span>{{ collection.description || '人工主题歌单' }}</span>
+        <small>{{ collection.trackCount }} 首 · {{ collection.status === 'published' ? '已发布' : '草稿' }}</small>
       </div>
     </article>
   </RouterLink>
