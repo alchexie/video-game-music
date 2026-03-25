@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Search } from '@element-plus/icons-vue'
+import { HomeFilled, Search, SetUp } from '@element-plus/icons-vue'
 import { computed, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 
@@ -17,6 +17,7 @@ watch(
 )
 
 const isAdminRoute = computed(() => route.path.startsWith('/admin'))
+const isSearchRoute = computed(() => route.path.startsWith('/search'))
 
 function submitSearch() {
   router.push({
@@ -27,37 +28,51 @@ function submitSearch() {
 </script>
 
 <template>
-  <div class="app-shell">
-    <header class="site-header">
-      <RouterLink class="brand" to="/">
-        <span class="brand-kicker">电子游戏音乐</span>
-        <strong class="brand-title">曲库播放器</strong>
-      </RouterLink>
-
-      <div class="site-actions">
-        <el-input
-          v-model="search"
-          class="site-search"
-          placeholder="搜索专辑或曲目"
-          @keyup.enter="submitSearch"
-        >
-          <template #prefix>
-            <el-icon><Search /></el-icon>
-          </template>
-        </el-input>
-        <el-button type="primary" plain @click="submitSearch">
-          搜索
-        </el-button>
-        <RouterLink class="nav-link" :class="{ active: isAdminRoute }" to="/admin">
-          管理
-        </RouterLink>
+  <aside class="sidebar">
+    <RouterLink class="sidebar-brand" to="/">
+      <div class="sidebar-logo">🎮</div>
+      <div class="sidebar-name">
+        <small>电子游戏音乐</small>
+        <strong>VGM 曲库</strong>
       </div>
-    </header>
+    </RouterLink>
 
-    <main class="page-shell">
+    <div class="sidebar-nav">
+      <span class="sidebar-section-label">浏览</span>
+      <RouterLink class="nav-item" :class="{ active: route.path === '/' }" to="/">
+        <el-icon><HomeFilled /></el-icon>
+        <span>首页</span>
+      </RouterLink>
+      <RouterLink class="nav-item" :class="{ active: isSearchRoute }" to="/search">
+        <el-icon><Search /></el-icon>
+        <span>搜索</span>
+      </RouterLink>
+      <span class="sidebar-section-label">系统</span>
+      <RouterLink class="nav-item" :class="{ active: isAdminRoute }" to="/admin">
+        <el-icon><SetUp /></el-icon>
+        <span>管理后台</span>
+      </RouterLink>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <div class="main-topbar">
+      <el-input
+        v-model="search"
+        class="topbar-search"
+        placeholder="搜索专辑或曲目…"
+        @keyup.enter="submitSearch"
+      >
+        <template #prefix>
+          <el-icon><Search /></el-icon>
+        </template>
+      </el-input>
+    </div>
+
+    <div class="page-container">
       <RouterView />
-    </main>
-
-    <PlayerBar />
+    </div>
   </div>
+
+  <PlayerBar />
 </template>

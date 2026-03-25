@@ -15,14 +15,19 @@ defineProps<{
           :src="`/api/assets/${album.coverAssetId}/cover`"
           :alt="album.title"
         />
-        <div v-else class="cover-fallback">
-          专辑
+        <div v-else class="cover-fallback">🎮</div>
+        <div class="media-card-play-overlay">
+          <div class="media-card-play-btn">
+            <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </div>
         </div>
       </div>
       <div class="media-card-body">
-        <strong>{{ album.title }}</strong>
-        <span>{{ album.albumArtist }}</span>
-        <small>{{ album.year ?? '年份未知' }} · {{ album.trackCount }} 首 · {{ album.discCount }} 张盘</small>
+        <span class="media-card-title">{{ album.title }}</span>
+        <span class="media-card-sub">{{ album.albumArtist }}</span>
+        <span class="media-card-meta">{{ album.year ?? '年份未知' }} · {{ album.trackCount }} 首</span>
       </div>
     </article>
   </RouterLink>

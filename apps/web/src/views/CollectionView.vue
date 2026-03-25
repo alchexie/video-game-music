@@ -28,13 +28,8 @@ async function loadCollection() {
   }
 }
 
-watch(() => route.params.id, () => {
-  void loadCollection()
-})
-
-onMounted(() => {
-  void loadCollection()
-})
+watch(() => route.params.id, () => { void loadCollection() })
+onMounted(() => { void loadCollection() })
 
 const coverUrl = computed(() => (
   collection.value?.coverAssetId ? `/api/assets/${collection.value.coverAssetId}/cover` : ''
@@ -46,35 +41,40 @@ const coverUrl = computed(() => (
     <template #default>
       <el-alert
         v-if="loadError"
-        class="section-block"
         type="error"
         :closable="false"
         :title="loadError"
+        style="margin-bottom:24px;border-radius:10px"
       />
 
-      <section v-if="collection" class="detail-hero detail-hero--collection">
-        <img v-if="collection.coverAssetId" class="detail-cover" :src="coverUrl" :alt="collection.title" />
-        <div v-else class="detail-cover detail-cover--empty">
-          歌单
-        </div>
-
-        <div class="detail-copy">
-          <span class="eyebrow">主题歌单</span>
-          <h1>{{ collection.title }}</h1>
-          <p>{{ collection.description || '从不同来源曲目中人工整理出的固定歌单。' }}</p>
-          <small>{{ collection.tracks.length }} 首曲目 · {{ collection.status === 'published' ? '已发布' : '草稿' }}</small>
-        </div>
-      </section>
-
-      <section v-if="collection" class="section-block">
-        <div class="section-head">
-          <div>
-            <span class="eyebrow">歌单内容</span>
-            <h2>曲目列表</h2>
+      <template v-if="collection">
+        <div class="page-hero">
+          <div class="page-hero-cover">
+            <img v-if="collection.coverAssetId" :src="coverUrl" :alt="collection.title" />
+            <div v-else class="page-hero-cover-fallback">🎵</div>
+          </div>
+          <div class="page-hero-meta">
+            <span class="page-hero-type">主题歌单</span>
+            <h1 class="page-hero-title">{{ collection.title }}</h1>
+            <p class="page-hero-sub">{{ collection.description || '从不同来源曲目中人工整理的固定歌单。' }}</p>
+            <p class="page-hero-sub">{{ collection.tracks.length }} 首曲目 &middot; {{ collection.status === 'published' ? '已发布' : '草稿' }}</p>
           </div>
         </div>
-        <TrackTable :tracks="collection.tracks" :queue-label="collection.title" />
-      </section>
+
+        <section class="content-section">
+          <div class="section-header">
+            <div>
+              <div class="section-eyebrow">歌单内容</div>
+              <h2 class="section-title">曲目列表</h2>
+            </div>
+          </div>
+          <TrackTable
+            :tracks="collection.tracks"
+            :queue-label="collection.title"
+            :cover-asset-id="collection.coverAssetId"
+          />
+        </section>
+      </template>
 
       <el-empty v-else-if="!loading && !loadError" description="未找到该歌单。" />
     </template>

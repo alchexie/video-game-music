@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { Search } from '@element-plus/icons-vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -30,26 +30,19 @@ async function runSearch() {
   }
 }
 
-watch(keyword, () => {
-  void runSearch()
-})
-
-onMounted(() => {
-  void runSearch()
-})
+watch(keyword, () => { void runSearch() })
+onMounted(() => { void runSearch() })
 </script>
 
 <template>
-  <section class="section-head">
-    <div>
-      <span class="eyebrow">搜索</span>
-      <h1>“{{ keyword || '...' }}” 的搜索结果</h1>
-    </div>
-  </section>
+  <div class="search-hero">
+    <div class="section-eyebrow">搜索</div>
+    <h1>"{{ keyword || '…' }}"</h1>
+  </div>
 
   <el-empty
     v-if="!keyword"
-    description="请在顶部搜索框输入关键词。"
+    description="在顶部搜索框输入关键词后开始搜索。"
   >
     <template #image>
       <el-icon :size="48"><Search /></el-icon>
@@ -58,11 +51,11 @@ onMounted(() => {
 
   <el-skeleton :loading="loading" animated>
     <template #default>
-      <section v-if="keyword" class="section-block">
-        <div class="section-head">
+      <section v-if="keyword" class="content-section">
+        <div class="section-header">
           <div>
-            <span class="eyebrow">专辑</span>
-            <h2>{{ result.albums.length }} 条结果</h2>
+            <div class="section-eyebrow">专辑</div>
+            <h2 class="section-title">{{ result.albums.length }} 条结果</h2>
           </div>
         </div>
         <div v-if="result.albums.length" class="card-grid">
@@ -71,11 +64,11 @@ onMounted(() => {
         <el-empty v-else description="没有匹配到专辑。" />
       </section>
 
-      <section v-if="keyword" class="section-block">
-        <div class="section-head">
+      <section v-if="keyword" class="content-section">
+        <div class="section-header">
           <div>
-            <span class="eyebrow">曲目</span>
-            <h2>{{ result.tracks.length }} 条结果</h2>
+            <div class="section-eyebrow">曲目</div>
+            <h2 class="section-title">{{ result.tracks.length }} 条结果</h2>
           </div>
         </div>
         <TrackTable :tracks="result.tracks" queue-label="搜索结果" />

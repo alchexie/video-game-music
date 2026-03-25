@@ -34,64 +34,41 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section class="hero-panel">
-    <div>
-      <span class="eyebrow">本地优先曲库</span>
-      <h1>浏览游戏音乐专辑，直接播放曲目，并随时为 COS 同步做好准备。</h1>
-      <p>
-        开发环境直接读取本地资源，按专辑自动聚合曲目；
-        管理后台则负责人工维护跨专辑主题歌单。
-      </p>
-    </div>
-    <div class="hero-stats">
-      <article>
-        <strong>{{ albums.length }}</strong>
-        <span>专辑</span>
-      </article>
-      <article>
-        <strong>{{ collections.length }}</strong>
-        <span>主题歌单</span>
-      </article>
-    </div>
-  </section>
-
   <el-skeleton :loading="loading" animated>
     <template #template>
       <div class="card-grid">
-        <div v-for="item in 6" :key="item" class="media-card skeleton-card" />
+        <div v-for="item in 8" :key="item" class="media-card skeleton-card" />
       </div>
     </template>
 
     <template #default>
       <el-alert
         v-if="loadError"
-        class="section-block"
         type="error"
         :closable="false"
         :title="loadError"
+        style="margin-bottom:24px;border-radius:10px"
       />
 
-      <section class="section-block">
-        <div class="section-head">
+      <section class="content-section">
+        <div class="section-header">
           <div>
-            <span class="eyebrow">系统生成</span>
-            <h2>专辑集合</h2>
+            <h2 class="section-title">专辑</h2>
           </div>
-          <small>共 {{ albums.length }} 张</small>
+          <span class="section-count">共 {{ albums.length }} 张</span>
         </div>
         <div class="card-grid">
           <AlbumCard v-for="album in albums" :key="album.publicId" :album="album" />
         </div>
       </section>
 
-      <section class="section-block">
-        <div class="section-head">
+      <section class="content-section">
+        <div class="section-header">
           <div>
-            <span class="eyebrow">人工整理</span>
-            <h2>主题歌单</h2>
+            <h2 class="section-title">歌单</h2>
           </div>
         </div>
-        <div v-if="collections.length" class="card-grid card-grid--narrow">
+        <div v-if="collections.length" class="card-grid">
           <CollectionCard
             v-for="collection in collections"
             :key="collection.publicId"

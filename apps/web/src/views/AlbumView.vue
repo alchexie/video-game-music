@@ -28,13 +28,8 @@ async function loadAlbum() {
   }
 }
 
-watch(() => route.params.id, () => {
-  void loadAlbum()
-})
-
-onMounted(() => {
-  void loadAlbum()
-})
+watch(() => route.params.id, () => { void loadAlbum() })
+onMounted(() => { void loadAlbum() })
 
 const coverUrl = computed(() => (
   album.value?.coverAssetId ? `/api/assets/${album.value.coverAssetId}/cover` : ''
@@ -46,35 +41,35 @@ const coverUrl = computed(() => (
     <template #default>
       <el-alert
         v-if="loadError"
-        class="section-block"
         type="error"
         :closable="false"
         :title="loadError"
+        style="margin-bottom:24px;border-radius:10px"
       />
 
-      <section v-if="album" class="detail-hero">
-        <img v-if="album.coverAssetId" class="detail-cover" :src="coverUrl" :alt="album.title" />
-        <div v-else class="detail-cover detail-cover--empty">
-          专辑
-        </div>
-
-        <div class="detail-copy">
-          <span class="eyebrow">专辑</span>
-          <h1>{{ album.title }}</h1>
-          <p>{{ album.albumArtist }} · {{ album.year ?? '年份未知' }}</p>
-          <small>{{ album.trackCount }} 首曲目 · {{ album.discCount }} 张盘</small>
-        </div>
-      </section>
-
-      <section v-if="album" class="section-block">
-        <div class="section-head">
-          <div>
-            <span class="eyebrow">曲目列表</span>
-            <h2>分盘浏览</h2>
+      <template v-if="album">
+        <div class="page-hero">
+          <div class="page-hero-cover">
+            <img v-if="album.coverAssetId" :src="coverUrl" :alt="album.title" />
+            <div v-else class="page-hero-cover-fallback">🎮</div>
+          </div>
+          <div class="page-hero-meta">
+            <span class="page-hero-type">专辑</span>
+            <h1 class="page-hero-title">{{ album.title }}</h1>
+            <p class="page-hero-sub">{{ album.albumArtist }} &middot; {{ album.year ?? '年份未知' }}</p>
+            <p class="page-hero-sub">{{ album.trackCount }} 首曲目 &middot; {{ album.discCount }} 张盘</p>
           </div>
         </div>
-        <TrackTable :tracks="album.tracks" :queue-label="album.title" group-by-disc />
-      </section>
+
+        <section class="content-section">
+          <TrackTable
+            :tracks="album.tracks"
+            :queue-label="album.title"
+            :cover-asset-id="album.coverAssetId"
+            group-by-disc
+          />
+        </section>
+      </template>
 
       <el-empty v-else-if="!loading && !loadError" description="未找到该专辑。" />
     </template>

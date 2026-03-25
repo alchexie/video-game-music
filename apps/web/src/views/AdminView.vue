@@ -101,15 +101,12 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="section-block section-block--admin">
-    <div class="section-head">
-      <div>
-        <span class="eyebrow">管理后台</span>
-        <h1>入库、同步与歌单整理</h1>
-      </div>
-    </div>
+  <div style="padding:8px 0 28px">
+    <div class="section-eyebrow">管理后台</div>
+    <h1 style="font-size:1.8rem;font-weight:900;letter-spacing:-0.02em;margin-top:6px">入库、同步与歌单整理</h1>
+  </div>
 
-    <div class="admin-grid">
+  <div class="admin-grid">
       <el-card shadow="never">
         <template #header>
           <strong>管理令牌</strong>
@@ -153,17 +150,16 @@ onMounted(() => {
         </el-form>
       </el-card>
     </div>
-  </section>
 
-  <section class="section-block">
-    <div class="section-head">
+  <div class="content-section">
+    <div class="section-header">
       <div>
-        <span class="eyebrow">主题歌单</span>
-        <h2>添加曲目</h2>
+        <div class="section-eyebrow">主题歌单</div>
+        <h2 class="section-title">添加曲目</h2>
       </div>
     </div>
 
-    <div class="admin-toolbar">
+    <div class="admin-toolbar" style="margin-bottom:16px">
       <el-select v-model="selectedCollectionId" placeholder="选择歌单">
         <el-option
           v-for="collection in collections"
@@ -191,27 +187,25 @@ onMounted(() => {
         type="button"
         @click="addTrack(track.publicId)"
       >
-        <span class="track-meta">
-          <strong>{{ track.trackNumber || '-' }}</strong>
-          <em>{{ track.title }}</em>
+        <span class="track-index">{{ track.trackNumber || '·' }}</span>
+        <span class="track-info">
+          <span class="track-name">{{ track.title }}</span>
+          <span class="track-artist">{{ track.artist }}</span>
         </span>
-        <span class="track-side">
-          <small>{{ track.artist }}</small>
-          <small>加入歌单</small>
-        </span>
+        <span class="track-duration" style="color:var(--accent)">加入歌单 +</span>
       </button>
     </div>
 
     <el-empty v-if="!searchResults.length" description="搜索曲目后可直接加入当前歌单。" />
-  </section>
+  </div>
 
-  <section class="section-block">
-    <div class="section-head">
+  <div class="content-section">
+    <div class="section-header">
       <div>
-        <span class="eyebrow">最近结果</span>
-        <h2>任务输出</h2>
+        <div class="section-eyebrow">最近结果</div>
+        <h2 class="section-title">任务输出</h2>
       </div>
     </div>
     <pre class="admin-output">{{ jobResult || '尚未执行任何任务。' }}</pre>
-  </section>
+  </div>
 </template>
