@@ -30,7 +30,6 @@ function submitSearch() {
       <RouterLink class="topbar-brand" to="/">
         <div class="topbar-logo">🎮</div>
         <div class="topbar-title">
-          <small>电子游戏</small>
           <strong>VGM 曲库</strong>
         </div>
       </RouterLink>

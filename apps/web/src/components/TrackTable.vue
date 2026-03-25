@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import type { TrackListItem } from '@vgm/shared'
 
@@ -45,16 +45,43 @@ function playTrack(index: number) {
 function isActive(track: TrackListItem) {
   return player.currentTrack?.publicId === track.publicId
 }
+
+const collapsedDiscs = ref<Set<string>>(new Set())
+
+function toggleDisc(key: string) {
+  if (collapsedDiscs.value.has(key)) {
+    collapsedDiscs.value.delete(key)
+  } else {
+    collapsedDiscs.value.add(key)
+  }
+  // trigger reactivity
+  collapsedDiscs.value = new Set(collapsedDiscs.value)
+}
 </script>
 
 <template>
   <div class="track-groups">
     <section v-for="group in groups" :key="group.key" class="track-group">
-      <div v-if="group.title" class="track-group-label">
+      <button
+        v-if="group.title"
+        class="track-group-label"
+        type="button"
+        @click="toggleDisc(group.key)"
+      >
+        <svg
+          class="track-group-chevron"
+          :class="{ collapsed: collapsedDiscs.has(group.key) }"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+        >
+          <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
+        </svg>
         {{ group.title }}
-      </div>
+      </button>
 
-      <div class="track-list">
+      <div v-show="!collapsedDiscs.has(group.key)" class="track-list">
         <button
           v-for="track in group.tracks"
           :key="track.publicId"
