@@ -116,7 +116,7 @@ export async function createApp() {
       return;
     }
 
-    await streamLocalFile(reply, stream.filePath!, stream.mimeType || 'audio/mpeg', request.headers.range);
+    return streamLocalFile(reply, stream.filePath!, stream.mimeType || 'audio/mpeg', request.headers.range);
   });
 
   app.get('/api/assets/:id/cover', async (request, reply) => {
@@ -134,7 +134,7 @@ export async function createApp() {
     }
 
     reply.header('Content-Type', cover.mimeType || 'image/jpeg');
-    reply.send(fs.createReadStream(cover.filePath!));
+    return fs.createReadStream(cover.filePath!);
   });
 
   app.get('/api/collections', async () => {
@@ -256,13 +256,12 @@ async function streamLocalFile(
       reply.header('Accept-Ranges', 'bytes');
       reply.header('Content-Length', end - start + 1);
       reply.header('Content-Type', mimeType);
-      reply.send(fs.createReadStream(filePath, { start, end }));
-      return;
+      return fs.createReadStream(filePath, { start, end });
     }
   }
 
   reply.header('Content-Length', fileSize);
   reply.header('Content-Type', mimeType);
   reply.header('Accept-Ranges', 'bytes');
-  reply.send(fs.createReadStream(filePath));
+  return fs.createReadStream(filePath);
 }
