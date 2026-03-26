@@ -255,7 +255,6 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
         fileSize: candidate.fileSize,
         modifiedAt: candidate.modifiedAt,
         contentHash: unchanged ? existingAsset?.contentHash : undefined,
-        cosKey: existingAsset?.cosKey,
         syncStatus: unchanged ? (existingAsset?.syncStatus ?? 'pending') : 'pending',
         presenceStatus: 'active',
         createdAt: existingAsset?.createdAt ?? now,
@@ -265,8 +264,8 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
       run(context, `
       INSERT INTO mediaAssets (
         publicId, sourceKey, relativePath, extension, mimeType, fileSize, modifiedAt, contentHash,
-        cosKey, syncStatus, presenceStatus, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        syncStatus, presenceStatus, createdAt, updatedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(sourceKey) DO UPDATE SET
         publicId = excluded.publicId,
         relativePath = excluded.relativePath,
@@ -275,7 +274,6 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
         fileSize = excluded.fileSize,
         modifiedAt = excluded.modifiedAt,
         contentHash = excluded.contentHash,
-        cosKey = excluded.cosKey,
         syncStatus = excluded.syncStatus,
         presenceStatus = excluded.presenceStatus,
         createdAt = excluded.createdAt,
@@ -289,7 +287,6 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
         assetRecord.fileSize,
         assetRecord.modifiedAt,
         assetRecord.contentHash ?? null,
-        assetRecord.cosKey ?? null,
         assetRecord.syncStatus,
         assetRecord.presenceStatus,
         assetRecord.createdAt,

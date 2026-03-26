@@ -30,16 +30,16 @@ export async function syncMediaToCos(context: DatabaseContext, config: AppConfig
   for (const asset of assets) {
     try {
       const localAudioPath = path.join(config.libraryRoot, ...asset.relativePath.split('/'));
-      const audioKey = asset.cosKey ?? joinCosKey(config.cosBasePrefix, 'audio', asset.relativePath);
+      const audioKey = joinCosKey(config.cosBasePrefix, 'audio', `${asset.publicId}${asset.extension}`);
 
       await uploadFile(client, config, localAudioPath, audioKey);
       summary.uploadedAudio += 1;
 
       run(context, `
         UPDATE mediaAssets
-        SET cosKey = ?, syncStatus = 'synced', updatedAt = ?
+        SET syncStatus = 'synced', updatedAt = ?
         WHERE publicId = ?
-      `, [audioKey, new Date().toISOString(), asset.publicId]);
+      `, [new Date().toISOString(), asset.publicId]);
     } catch (error) {
       summary.failed += 1;
       run(context, `
@@ -54,8 +54,8 @@ export async function syncMediaToCos(context: DatabaseContext, config: AppConfig
   return summary;
 }
 
-function joinCosKey(prefix: string, category: string, relativePath: string) {
-  return [prefix, category, relativePath.replace(/\\/g, '/')].filter(Boolean).join('/');
+function joinCosKey(prefix: string, category: string, name: string) {
+  return [prefix, category, name].filter(Boolean).join('/');
 }
 
 function uploadFile(client: COS, config: AppConfig, filePath: string, key: string) {

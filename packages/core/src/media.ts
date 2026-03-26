@@ -34,7 +34,8 @@ export async function resolveTrackStream(context: DatabaseContext, config: AppCo
     };
   }
 
-  const redirectUrl = await resolveCosUrl(config, asset.cosKey);
+  const cosKey = [config.cosBasePrefix, 'audio', `${asset.publicId}${asset.extension}`].filter(Boolean).join('/');
+  const redirectUrl = await resolveCosUrl(config, cosKey);
   return redirectUrl
     ? {
       mode: 'redirect',

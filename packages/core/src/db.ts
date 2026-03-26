@@ -68,7 +68,6 @@ async function connectDatabase(config: AppConfig): Promise<DatabaseContext> {
       fileSize INTEGER NOT NULL,
       modifiedAt TEXT NOT NULL,
       contentHash TEXT,
-      cosKey TEXT,
       syncStatus TEXT NOT NULL,
       presenceStatus TEXT NOT NULL,
       createdAt TEXT NOT NULL,
@@ -146,6 +145,14 @@ async function connectDatabase(config: AppConfig): Promise<DatabaseContext> {
     CREATE INDEX IF NOT EXISTS idx_series_albums_series ON seriesAlbums(seriesId, sortOrder);
     CREATE INDEX IF NOT EXISTS idx_series_albums_album ON seriesAlbums(albumId);
   `);
+
+  // Drop legacy columns if they exist
+  const assetCols = new Set(
+    (db.prepare(`PRAGMA table_info(mediaAssets)`).all() as Array<{ name: string }>).map((c) => c.name),
+  );
+  for (const col of ['cosKey']) {
+    if (assetCols.has(col)) db.exec(`ALTER TABLE mediaAssets DROP COLUMN ${col}`);
+  }
 
   return { db };
 }
@@ -242,7 +249,6 @@ export function mapMediaAsset(row: Row): MediaAssetRecord {
     fileSize: Number(row.fileSize ?? 0),
     modifiedAt: String(row.modifiedAt),
     contentHash: typeof row.contentHash === 'string' ? row.contentHash : undefined,
-    cosKey: typeof row.cosKey === 'string' ? row.cosKey : undefined,
     syncStatus: row.syncStatus as MediaAssetRecord['syncStatus'],
     presenceStatus: row.presenceStatus as MediaAssetRecord['presenceStatus'],
     createdAt: String(row.createdAt),

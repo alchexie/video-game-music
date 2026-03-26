@@ -41,7 +41,6 @@ export interface MediaAssetRecord {
   fileSize: number;
   modifiedAt: string;
   contentHash?: string;
-  cosKey?: string;
   syncStatus: SyncStatus;
   presenceStatus: PresenceStatus;
   createdAt: string;
