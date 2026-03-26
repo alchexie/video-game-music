@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import mime from 'mime-types';
 import { parseFile } from 'music-metadata';
+import sharp from 'sharp';
 import { v7 as uuidv7 } from 'uuid';
 
 import type {
@@ -19,7 +20,6 @@ import type {
 } from '@vgm/shared';
 import {
   SUPPORTED_AUDIO_EXTENSIONS,
-  SUPPORTED_COVER_EXTENSIONS,
   compareTrackOrder,
   makeAlbumKey,
   makeSeriesKey,
@@ -93,6 +93,14 @@ export async function scanLibrary(context: DatabaseContext, options: ImportOptio
   const candidates: ScannedCandidate[] = new Array(files.length);
   const existingAssets = all<Record<string, unknown>>(context, 'SELECT * FROM mediaAssets').map(mapMediaAsset);
   const existingMap = new Map(existingAssets.map((asset) => [asset.sourceKey, asset]));
+  const existingTracks = all<Record<string, unknown>>(context, 'SELECT * FROM tracks').map(mapTrack);
+  const existingTrackByAssetId = new Map(existingTracks.map((t) => [t.mediaAssetId, t]));
+  const existingByPath = new Map(
+    existingAssets.flatMap((asset) => {
+      const track = existingTrackByAssetId.get(asset.publicId);
+      return track ? [[asset.relativePath, { asset, sourceMeta: track.sourceMeta }] as const] : [];
+    }),
+  );
 
   const METADATA_CONCURRENCY = 16;
   let metaCompleted = 0;
@@ -101,7 +109,28 @@ export async function scanLibrary(context: DatabaseContext, options: ImportOptio
   async function processNextFile() {
     while (nextFileIndex < files.length) {
       const i = nextFileIndex++;
-      candidates[i] = await buildCandidate(options.libraryRoot, files[i]!);
+      const absolutePath = files[i]!;
+      const relativePath = normalizeRelativePath(options.libraryRoot, absolutePath);
+      const stat = await fs.stat(absolutePath);
+      const cached = existingByPath.get(relativePath);
+
+      if (cached && stat.size === cached.asset.fileSize && stat.mtime.toISOString() === cached.asset.modifiedAt) {
+        const extension = path.extname(absolutePath).toLowerCase();
+        candidates[i] = {
+          absolutePath,
+          relativePath,
+          sourceKey: cached.asset.sourceKey,
+          sourceDirectory: path.dirname(relativePath),
+          fileSize: stat.size,
+          modifiedAt: cached.asset.modifiedAt,
+          extension,
+          mimeType: cached.asset.mimeType,
+          metadata: cached.sourceMeta,
+        };
+      } else {
+        candidates[i] = await buildCandidate(options.libraryRoot, absolutePath);
+      }
+
       metaCompleted++;
       if (metaCompleted % 100 === 0 || metaCompleted === files.length) {
         reportProgress(options, {
@@ -380,6 +409,7 @@ async function rebuildAlbums(context: DatabaseContext, options: Pick<AppConfig, 
 
   const existingAlbumMap = new Map(existingAlbums.map((album) => [album.albumKey, album]));
   const albumDocs: AlbumRecord[] = [];
+  const albumFirstTrackPath = new Map<string, string>();
   const albumTrackDocs: Array<{
     albumId: string;
     trackId: string;
@@ -408,6 +438,10 @@ async function rebuildAlbums(context: DatabaseContext, options: Pick<AppConfig, 
     const firstTrack = group[0]!;
     const existingAlbum = existingAlbumMap.get(albumKey);
     const albumPublicId = existingAlbum?.publicId ?? uuidv7();
+    const firstTrackAsset = trackAssetMap.get(firstTrack.mediaAssetId);
+    if (firstTrackAsset) {
+      albumFirstTrackPath.set(albumPublicId, path.join(options.libraryRoot, ...firstTrackAsset.relativePath.split('/')));
+    }
 
     albumDocs.push({
       publicId: albumPublicId,
@@ -444,18 +478,38 @@ async function rebuildAlbums(context: DatabaseContext, options: Pick<AppConfig, 
     });
   }
 
-  // 为每张专辑查找封面文件（Cover.png / Cover.jpg）
+  // 为每张专辑查找封面文件（Cover.png / Cover.jpg），无则提取首曲目内嵌封面，统一缩放为 512px PNG
   const coversDir = path.join(options.mediaCacheDir, 'covers');
   await fs.mkdir(coversDir, { recursive: true });
 
   for (const album of albumDocs) {
-    if (!album.sourceDirectory) continue;
-    const albumDir = path.join(options.libraryRoot, ...album.sourceDirectory.split('/'));
-    const coverEntry = await findAlbumCoverFile(albumDir);
-    if (!coverEntry) continue;
-    const destPath = path.join(coversDir, `${album.publicId}${coverEntry.ext}`);
-    await fs.copyFile(coverEntry.absolutePath, destPath);
-    album.coverAssetId = album.publicId;
+    const destPath = path.join(coversDir, `${album.publicId}.png`);
+    let covered = false;
+
+    if (album.sourceDirectory) {
+      const albumDir = path.join(options.libraryRoot, ...album.sourceDirectory.split('/'));
+      const coverEntry = await findAlbumCoverFile(albumDir);
+      if (coverEntry) {
+        await resizeCoverToPng(coverEntry.absolutePath, destPath);
+        covered = true;
+      }
+    }
+
+    if (!covered) {
+      const firstTrackPath = albumFirstTrackPath.get(album.publicId);
+      if (firstTrackPath) {
+        const tagMeta = await parseFile(firstTrackPath, { skipCovers: false, duration: false });
+        const picture = tagMeta.common.picture?.[0];
+        if (picture) {
+          await resizeCoverToPng(Buffer.from(picture.data), destPath);
+          covered = true;
+        }
+      }
+    }
+
+    if (covered) {
+      album.coverAssetId = album.publicId;
+    }
   }
 
   reportProgress(options, {
@@ -651,6 +705,13 @@ async function buildCandidate(libraryRoot: string, absolutePath: string): Promis
       durationSeconds: metadata.format.duration ? Math.round(metadata.format.duration) : 0,
     },
   };
+}
+
+async function resizeCoverToPng(input: string | Buffer, destPath: string): Promise<void> {
+  await sharp(input)
+    .resize(512, 512, { fit: 'inside' })
+    .png()
+    .toFile(destPath);
 }
 
 async function findAlbumCoverFile(albumDir: string): Promise<{ absolutePath: string; ext: string } | undefined> {
