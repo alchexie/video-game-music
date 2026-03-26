@@ -3,7 +3,6 @@ import { createReadStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { fileTypeFromBuffer } from 'file-type';
 import mime from 'mime-types';
 import { parseFile } from 'music-metadata';
 import { v7 as uuidv7 } from 'uuid';
@@ -21,7 +20,6 @@ import type {
 import {
   SUPPORTED_AUDIO_EXTENSIONS,
   SUPPORTED_COVER_EXTENSIONS,
-  buildCoverFileName,
   compareTrackOrder,
   makeAlbumKey,
   makeSeriesKey,
@@ -45,14 +43,6 @@ import {
 } from './db.js';
 import type { DatabaseContext } from './db.js';
 
-interface CoverDescriptor {
-  source: 'embedded' | 'external' | 'none';
-  mimeType?: string;
-  extension?: string;
-  data?: Uint8Array;
-  absolutePath?: string;
-}
-
 interface ScannedCandidate {
   absolutePath: string;
   relativePath: string;
@@ -63,7 +53,6 @@ interface ScannedCandidate {
   extension: string;
   mimeType: string;
   metadata: SourceMeta;
-  cover: CoverDescriptor;
 }
 
 interface ScanInternalResult {
@@ -101,24 +90,32 @@ export async function scanLibrary(context: DatabaseContext, options: ImportOptio
     elapsedMs: Date.now() - startedAt,
   });
 
-  const candidates: ScannedCandidate[] = [];
+  const candidates: ScannedCandidate[] = new Array(files.length);
   const existingAssets = all<Record<string, unknown>>(context, 'SELECT * FROM mediaAssets').map(mapMediaAsset);
   const existingMap = new Map(existingAssets.map((asset) => [asset.sourceKey, asset]));
 
-  for (const [index, absolutePath] of files.entries()) {
-    const candidate = await buildCandidate(options.libraryRoot, absolutePath);
-    candidates.push(candidate);
+  const METADATA_CONCURRENCY = 16;
+  let metaCompleted = 0;
+  let nextFileIndex = 0;
 
-    if ((index + 1) % 25 === 0 || index === files.length - 1) {
-      reportProgress(options, {
-        phase: 'metadata',
-        message: `正在读取标签与封面：${index + 1}/${files.length}`,
-        processed: index + 1,
-        total: files.length,
-        elapsedMs: Date.now() - startedAt,
-      });
+  async function processNextFile() {
+    while (nextFileIndex < files.length) {
+      const i = nextFileIndex++;
+      candidates[i] = await buildCandidate(options.libraryRoot, files[i]!);
+      metaCompleted++;
+      if (metaCompleted % 100 === 0 || metaCompleted === files.length) {
+        reportProgress(options, {
+          phase: 'metadata',
+          message: `正在读取标签：${metaCompleted}/${files.length}`,
+          processed: metaCompleted,
+          total: files.length,
+          elapsedMs: Date.now() - startedAt,
+        });
+      }
     }
   }
+
+  await Promise.all(Array.from({ length: Math.min(METADATA_CONCURRENCY, files.length) }, processNextFile));
 
   const seenSourceKeys = new Set(candidates.map((candidate) => candidate.sourceKey));
   const changes: LibraryScanSummary['changes'] = candidates.map((candidate) => {
@@ -204,43 +201,42 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
 
   reportProgress(config, {
     phase: 'write',
-    message: `开始写入数据库与封面缓存，共 ${scan.candidates.length} 个文件`,
+    message: `开始写入数据库，共 ${scan.candidates.length} 个文件`,
     processed: 0,
     total: scan.candidates.length,
     elapsedMs: Date.now() - startedAt,
   });
 
-  for (const [index, candidate] of scan.candidates.entries()) {
-    const existingAsset = assetMap.get(candidate.sourceKey);
-    const assetPublicId = existingAsset?.publicId ?? uuidv7();
-    const unchanged = existingAsset?.fileSize === candidate.fileSize && existingAsset.modifiedAt === candidate.modifiedAt;
-    const coverDetails = await materializeCover(candidate.cover, assetPublicId, config.mediaCacheDir);
+  const activeSourceKeys = new Set(scan.candidates.map((candidate) => candidate.sourceKey));
+  const missingAssets = existingAssets.filter((asset) => !activeSourceKeys.has(asset.sourceKey) && asset.presenceStatus === 'active');
 
-    const assetRecord: MediaAssetRecord = {
-      publicId: assetPublicId,
-      sourceKey: candidate.sourceKey,
-      relativePath: candidate.relativePath,
-      extension: candidate.extension,
-      mimeType: candidate.mimeType,
-      fileSize: candidate.fileSize,
-      modifiedAt: candidate.modifiedAt,
-      contentHash: unchanged ? existingAsset?.contentHash : undefined,
-      cosKey: existingAsset?.cosKey,
-      coverCosKey: existingAsset?.coverCosKey,
-      coverPath: coverDetails.coverPath,
-      coverMimeType: coverDetails.coverMimeType,
-      coverSource: coverDetails.coverSource,
-      syncStatus: unchanged ? (existingAsset?.syncStatus ?? 'pending') : 'pending',
-      presenceStatus: 'active',
-      createdAt: existingAsset?.createdAt ?? now,
-      updatedAt: now,
-    };
+  transaction(context, () => {
+    for (const [index, candidate] of scan.candidates.entries()) {
+      const existingAsset = assetMap.get(candidate.sourceKey);
+      const assetPublicId = existingAsset?.publicId ?? uuidv7();
+      const unchanged = existingAsset?.fileSize === candidate.fileSize && existingAsset.modifiedAt === candidate.modifiedAt;
 
-    run(context, `
+      const assetRecord: MediaAssetRecord = {
+        publicId: assetPublicId,
+        sourceKey: candidate.sourceKey,
+        relativePath: candidate.relativePath,
+        extension: candidate.extension,
+        mimeType: candidate.mimeType,
+        fileSize: candidate.fileSize,
+        modifiedAt: candidate.modifiedAt,
+        contentHash: unchanged ? existingAsset?.contentHash : undefined,
+        cosKey: existingAsset?.cosKey,
+        syncStatus: unchanged ? (existingAsset?.syncStatus ?? 'pending') : 'pending',
+        presenceStatus: 'active',
+        createdAt: existingAsset?.createdAt ?? now,
+        updatedAt: now,
+      };
+
+      run(context, `
       INSERT INTO mediaAssets (
         publicId, sourceKey, relativePath, extension, mimeType, fileSize, modifiedAt, contentHash,
-        cosKey, coverPath, coverMimeType, coverCosKey, coverSource, syncStatus, presenceStatus, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        cosKey, syncStatus, presenceStatus, createdAt, updatedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(sourceKey) DO UPDATE SET
         publicId = excluded.publicId,
         relativePath = excluded.relativePath,
@@ -250,53 +246,45 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
         modifiedAt = excluded.modifiedAt,
         contentHash = excluded.contentHash,
         cosKey = excluded.cosKey,
-        coverPath = excluded.coverPath,
-        coverMimeType = excluded.coverMimeType,
-        coverCosKey = excluded.coverCosKey,
-        coverSource = excluded.coverSource,
         syncStatus = excluded.syncStatus,
         presenceStatus = excluded.presenceStatus,
         createdAt = excluded.createdAt,
         updatedAt = excluded.updatedAt
     `, [
-      assetRecord.publicId,
-      assetRecord.sourceKey,
-      assetRecord.relativePath,
-      assetRecord.extension,
-      assetRecord.mimeType,
-      assetRecord.fileSize,
-      assetRecord.modifiedAt,
-      assetRecord.contentHash ?? null,
-      assetRecord.cosKey ?? null,
-      assetRecord.coverPath ?? null,
-      assetRecord.coverMimeType ?? null,
-      assetRecord.coverCosKey ?? null,
-      assetRecord.coverSource,
-      assetRecord.syncStatus,
-      assetRecord.presenceStatus,
-      assetRecord.createdAt,
-      assetRecord.updatedAt,
-    ]);
+        assetRecord.publicId,
+        assetRecord.sourceKey,
+        assetRecord.relativePath,
+        assetRecord.extension,
+        assetRecord.mimeType,
+        assetRecord.fileSize,
+        assetRecord.modifiedAt,
+        assetRecord.contentHash ?? null,
+        assetRecord.cosKey ?? null,
+        assetRecord.syncStatus,
+        assetRecord.presenceStatus,
+        assetRecord.createdAt,
+        assetRecord.updatedAt,
+      ]);
 
-    const existingTrack = trackMap.get(assetPublicId);
-    const trackRecord: TrackRecord = {
-      publicId: existingTrack?.publicId ?? uuidv7(),
-      mediaAssetId: assetPublicId,
-      title: candidate.metadata.title,
-      artist: candidate.metadata.artist,
-      durationSeconds: candidate.metadata.durationSeconds ?? 0,
-      format: candidate.extension.replace('.', ''),
-      year: candidate.metadata.year,
-      genre: candidate.metadata.genre,
-      sourceMeta: candidate.metadata,
-      displayTitle: existingTrack?.displayTitle,
-      displayArtist: existingTrack?.displayArtist,
-      hidden: existingTrack?.hidden,
-      createdAt: existingTrack?.createdAt ?? now,
-      updatedAt: now,
-    };
+      const existingTrack = trackMap.get(assetPublicId);
+      const trackRecord: TrackRecord = {
+        publicId: existingTrack?.publicId ?? uuidv7(),
+        mediaAssetId: assetPublicId,
+        title: candidate.metadata.title,
+        artist: candidate.metadata.artist,
+        durationSeconds: candidate.metadata.durationSeconds ?? 0,
+        format: candidate.extension.replace('.', ''),
+        year: candidate.metadata.year,
+        genre: candidate.metadata.genre,
+        sourceMeta: candidate.metadata,
+        displayTitle: existingTrack?.displayTitle,
+        displayArtist: existingTrack?.displayArtist,
+        hidden: existingTrack?.hidden,
+        createdAt: existingTrack?.createdAt ?? now,
+        updatedAt: now,
+      };
 
-    run(context, `
+      run(context, `
       INSERT INTO tracks (
         publicId, mediaAssetId, title, artist, durationSeconds, format, year, genre, sourceMeta,
         displayTitle, displayArtist, hidden, createdAt, updatedAt
@@ -316,43 +304,32 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
         createdAt = excluded.createdAt,
         updatedAt = excluded.updatedAt
     `, [
-      trackRecord.publicId,
-      trackRecord.mediaAssetId,
-      trackRecord.title,
-      trackRecord.artist,
-      trackRecord.durationSeconds,
-      trackRecord.format,
-      trackRecord.year ?? null,
-      trackRecord.genre ?? null,
-      encodeJson(trackRecord.sourceMeta),
-      trackRecord.displayTitle ?? null,
-      trackRecord.displayArtist ?? null,
-      trackRecord.hidden ? 1 : 0,
-      trackRecord.createdAt,
-      trackRecord.updatedAt,
-    ]);
+        trackRecord.publicId,
+        trackRecord.mediaAssetId,
+        trackRecord.title,
+        trackRecord.artist,
+        trackRecord.durationSeconds,
+        trackRecord.format,
+        trackRecord.year ?? null,
+        trackRecord.genre ?? null,
+        encodeJson(trackRecord.sourceMeta),
+        trackRecord.displayTitle ?? null,
+        trackRecord.displayArtist ?? null,
+        trackRecord.hidden ? 1 : 0,
+        trackRecord.createdAt,
+        trackRecord.updatedAt,
+      ]);
 
-    if ((index + 1) % 25 === 0 || index === scan.candidates.length - 1) {
-      reportProgress(config, {
-        phase: 'write',
-        message: `已写入 ${index + 1}/${scan.candidates.length} 个文件`,
-        processed: index + 1,
-        total: scan.candidates.length,
-        elapsedMs: Date.now() - startedAt,
-      });
+      if ((index + 1) % 100 === 0 || index === scan.candidates.length - 1) {
+        reportProgress(config, {
+          phase: 'write',
+          message: `已写入 ${index + 1}/${scan.candidates.length} 个文件`,
+          processed: index + 1,
+          total: scan.candidates.length,
+          elapsedMs: Date.now() - startedAt,
+        });
+      }
     }
-  }
-
-  const activeSourceKeys = new Set(scan.candidates.map((candidate) => candidate.sourceKey));
-  const missingAssets = existingAssets.filter((asset) => !activeSourceKeys.has(asset.sourceKey) && asset.presenceStatus === 'active');
-  if (missingAssets.length > 0) {
-    reportProgress(config, {
-      phase: 'write',
-      message: `标记 ${missingAssets.length} 个缺失文件`,
-      processed: missingAssets.length,
-      total: missingAssets.length,
-      elapsedMs: Date.now() - startedAt,
-    });
 
     for (const asset of missingAssets) {
       run(context, `
@@ -361,7 +338,7 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
         WHERE sourceKey = ?
       `, [now, asset.sourceKey]);
     }
-  }
+  });
 
   reportProgress(config, {
     phase: 'rebuild',
@@ -369,9 +346,7 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
     elapsedMs: Date.now() - startedAt,
   });
 
-  await rebuildAlbums(context, {
-    onProgress: config.onImportProgress,
-  });
+  await rebuildAlbums(context, config);
 
   reportProgress(config, {
     phase: 'done',
@@ -384,7 +359,7 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
   return scan.summary;
 }
 
-async function rebuildAlbums(context: DatabaseContext, options?: Pick<ImportOptions, 'onProgress'>) {
+async function rebuildAlbums(context: DatabaseContext, options: Pick<AppConfig, 'libraryRoot' | 'mediaCacheDir'> & Pick<ImportOptions, 'onProgress'>) {
   const tracks = all<Record<string, unknown>>(context, `SELECT * FROM tracks WHERE hidden = 0`).map(mapTrack);
   const assets = all<Record<string, unknown>>(context, `SELECT * FROM mediaAssets WHERE presenceStatus = 'active'`).map(mapMediaAsset);
   const existingAlbums = all<Record<string, unknown>>(context, `SELECT * FROM albums WHERE isSystemGenerated = 1`).map(mapAlbum);
@@ -433,7 +408,6 @@ async function rebuildAlbums(context: DatabaseContext, options?: Pick<ImportOpti
     const firstTrack = group[0]!;
     const existingAlbum = existingAlbumMap.get(albumKey);
     const albumPublicId = existingAlbum?.publicId ?? uuidv7();
-    const coverTrack = group.find((track) => trackAssetMap.get(track.mediaAssetId)?.coverPath);
 
     albumDocs.push({
       publicId: albumPublicId,
@@ -442,7 +416,7 @@ async function rebuildAlbums(context: DatabaseContext, options?: Pick<ImportOpti
       albumArtist: firstTrack.sourceMeta.albumArtist,
       year: firstTrack.sourceMeta.year,
       sourceDirectory: commonDirectory(group.map((track) => trackAssetMap.get(track.mediaAssetId)?.relativePath ?? '')),
-      coverAssetId: existingAlbum?.coverAssetId ?? coverTrack?.mediaAssetId,
+      coverAssetId: undefined, // will be resolved below
       sourceMeta: {
         album: firstTrack.sourceMeta.album,
         albumArtist: firstTrack.sourceMeta.albumArtist,
@@ -468,6 +442,20 @@ async function rebuildAlbums(context: DatabaseContext, options?: Pick<ImportOpti
         createdAt: now,
       });
     });
+  }
+
+  // 为每张专辑查找封面文件（Cover.png / Cover.jpg）
+  const coversDir = path.join(options.mediaCacheDir, 'covers');
+  await fs.mkdir(coversDir, { recursive: true });
+
+  for (const album of albumDocs) {
+    if (!album.sourceDirectory) continue;
+    const albumDir = path.join(options.libraryRoot, ...album.sourceDirectory.split('/'));
+    const coverEntry = await findAlbumCoverFile(albumDir);
+    if (!coverEntry) continue;
+    const destPath = path.join(coversDir, `${album.publicId}${coverEntry.ext}`);
+    await fs.copyFile(coverEntry.absolutePath, destPath);
+    album.coverAssetId = album.publicId;
   }
 
   reportProgress(options, {
@@ -627,15 +615,11 @@ async function walkAudioFiles(
 }
 
 async function buildCandidate(libraryRoot: string, absolutePath: string): Promise<ScannedCandidate> {
-  const metadata = await parseFile(absolutePath, { duration: true, skipCovers: false });
+  const metadata = await parseFile(absolutePath, { duration: true, skipCovers: true });
   const stat = await fs.stat(absolutePath);
   const relativePath = normalizeRelativePath(libraryRoot, absolutePath);
   const extension = path.extname(absolutePath).toLowerCase();
   const common = metadata.common;
-  const picture = common.picture?.[0];
-  const cover = picture
-    ? await embeddedCover(picture.data, picture.format)
-    : await findDirectoryCover(path.dirname(absolutePath));
   const albumArtist = normalizeDisplayValue(common.albumartist || common.artist || 'Unknown Album Artist');
   const title = normalizeDisplayValue(common.title || path.parse(absolutePath).name);
   const artist = normalizeDisplayValue(common.artist || albumArtist || 'Unknown Artist');
@@ -665,72 +649,21 @@ async function buildCandidate(libraryRoot: string, absolutePath: string): Promis
       discNumber,
       discTitle,
       durationSeconds: metadata.format.duration ? Math.round(metadata.format.duration) : 0,
-      pictureCount: common.picture?.length ?? 0,
     },
-    cover,
   };
 }
 
-async function embeddedCover(data: Uint8Array, format?: string): Promise<CoverDescriptor> {
-  const detected = await fileTypeFromBuffer(data);
-  return {
-    source: 'embedded',
-    data,
-    mimeType: format || detected?.mime,
-    extension: detected?.ext ? `.${detected.ext}` : '.jpg',
-  };
-}
-
-async function findDirectoryCover(directory: string): Promise<CoverDescriptor> {
-  const entries = await fs.readdir(directory, { withFileTypes: true });
-  const coverEntry = entries.find((entry) =>
-    entry.isFile()
-    && SUPPORTED_COVER_EXTENSIONS.has(path.extname(entry.name).toLowerCase())
-    && /(cover|front)/i.test(entry.name),
-  ) ?? entries.find((entry) =>
-    entry.isFile() && SUPPORTED_COVER_EXTENSIONS.has(path.extname(entry.name).toLowerCase()),
-  );
-
-  if (!coverEntry) {
-    return { source: 'none' };
+async function findAlbumCoverFile(albumDir: string): Promise<{ absolutePath: string; ext: string } | undefined> {
+  for (const name of ['Cover.png', 'Cover.jpg', 'Cover.jpeg', 'Cover.webp']) {
+    const absolutePath = path.join(albumDir, name);
+    try {
+      await fs.access(absolutePath);
+      return { absolutePath, ext: path.extname(name).toLowerCase() };
+    } catch {
+      // not found, try next
+    }
   }
-
-  const absolutePath = path.join(directory, coverEntry.name);
-  return {
-    source: 'external',
-    absolutePath,
-    mimeType: mime.lookup(absolutePath) || 'image/jpeg',
-    extension: path.extname(absolutePath).toLowerCase(),
-  };
-}
-
-async function materializeCover(cover: CoverDescriptor, publicId: string, cacheDir: string) {
-  const coversDirectory = path.join(cacheDir, 'covers');
-  await fs.mkdir(coversDirectory, { recursive: true });
-
-  if (cover.source === 'none') {
-    return {
-      coverPath: undefined,
-      coverMimeType: undefined,
-      coverSource: 'none' as const,
-    };
-  }
-
-  const extension = cover.extension || '.jpg';
-  const fileName = buildCoverFileName(publicId, extension);
-  const absolutePath = path.join(coversDirectory, fileName);
-
-  if (cover.source === 'embedded' && cover.data) {
-    await fs.writeFile(absolutePath, cover.data);
-  } else if (cover.source === 'external' && cover.absolutePath) {
-    await fs.copyFile(cover.absolutePath, absolutePath);
-  }
-
-  return {
-    coverPath: `covers/${fileName}`,
-    coverMimeType: cover.mimeType || (mime.lookup(extension) || 'image/jpeg'),
-    coverSource: cover.source,
-  };
+  return undefined;
 }
 
 function parseDiscNumberFromDirectory(relativePath: string): number | undefined {

@@ -35,19 +35,11 @@ export async function syncMediaToCos(context: DatabaseContext, config: AppConfig
       await uploadFile(client, config, localAudioPath, audioKey);
       summary.uploadedAudio += 1;
 
-      let coverKey = asset.coverCosKey;
-      if (asset.coverPath) {
-        const localCoverPath = path.join(config.mediaCacheDir, ...asset.coverPath.split('/'));
-        coverKey = coverKey ?? joinCosKey(config.cosBasePrefix, 'covers', path.basename(asset.coverPath));
-        await uploadFile(client, config, localCoverPath, coverKey);
-        summary.uploadedCovers += 1;
-      }
-
       run(context, `
         UPDATE mediaAssets
-        SET cosKey = ?, coverCosKey = ?, syncStatus = 'synced', updatedAt = ?
+        SET cosKey = ?, syncStatus = 'synced', updatedAt = ?
         WHERE publicId = ?
-      `, [audioKey, coverKey ?? null, new Date().toISOString(), asset.publicId]);
+      `, [audioKey, new Date().toISOString(), asset.publicId]);
     } catch (error) {
       summary.failed += 1;
       run(context, `

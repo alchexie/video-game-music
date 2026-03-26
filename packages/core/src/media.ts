@@ -41,27 +41,24 @@ export async function resolveTrackStream(context: DatabaseContext, config: AppCo
     : null;
 }
 
-export async function resolveCoverAsset(context: DatabaseContext, config: AppConfig, assetId: string): Promise<StreamResolution | null> {
-  const asset = await getMediaAssetById(context, assetId);
-  if (!asset?.coverPath) {
-    return null;
-  }
+export async function resolveCoverAsset(_context: DatabaseContext, config: AppConfig, assetId: string): Promise<StreamResolution | null> {
+  const coversDir = path.join(config.mediaCacheDir, 'covers');
 
-  if (config.mediaSource === 'local') {
-    return {
-      mode: 'local',
-      filePath: path.join(config.mediaCacheDir, ...asset.coverPath.split('/')),
-      mimeType: asset.coverMimeType,
-    };
-  }
-
-  const redirectUrl = await resolveCosUrl(config, asset.coverCosKey);
-  return redirectUrl
-    ? {
-      mode: 'redirect',
-      redirectUrl,
+  for (const ext of ['.png', '.jpg', '.jpeg', '.webp'] as const) {
+    const filePath = path.join(coversDir, `${assetId}${ext}`);
+    try {
+      await import('node:fs/promises').then((fs) => fs.access(filePath));
+      return {
+        mode: 'local',
+        filePath,
+        mimeType: ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg',
+      };
+    } catch {
+      // try next extension
     }
-    : null;
+  }
+
+  return null;
 }
 
 async function resolveCosUrl(config: AppConfig, key?: string) {

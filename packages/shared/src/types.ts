@@ -1,6 +1,5 @@
 export type SyncStatus = 'pending' | 'synced' | 'failed';
 export type PresenceStatus = 'active' | 'missing';
-export type CoverSource = 'embedded' | 'external' | 'manual' | 'none';
 export type CollectionStatus = 'draft' | 'published';
 
 export interface SourceMeta {
@@ -14,7 +13,6 @@ export interface SourceMeta {
   discNumber?: number;
   discTitle?: string;
   durationSeconds?: number;
-  pictureCount?: number;
 }
 
 export interface TrackRecord {
@@ -44,10 +42,6 @@ export interface MediaAssetRecord {
   modifiedAt: string;
   contentHash?: string;
   cosKey?: string;
-  coverPath?: string;
-  coverMimeType?: string;
-  coverCosKey?: string;
-  coverSource: CoverSource;
   syncStatus: SyncStatus;
   presenceStatus: PresenceStatus;
   createdAt: string;
