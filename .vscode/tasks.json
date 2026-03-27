@@ -25,7 +25,7 @@
         "background": {
           "activeOnStart": true,
           "beginsPattern": ".",
-          "endsPattern": "Local:\\s+http://localhost:5173/?"
+          "endsPattern": "Local:\\s+http://localhost:6005/?"
         }
       }
     }
