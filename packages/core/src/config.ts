@@ -36,7 +36,12 @@ function requireEnv(env: NodeJS.ProcessEnv, key: string) {
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()): AppConfig {
   const workspaceRoot = resolveWorkspaceRoot(cwd);
-  const libraryRoot = requireEnv(env, 'MEDIA_LIBRARY_ROOT');
+  const mediaSource = env.MEDIA_SOURCE === 'cos' ? 'cos' : 'local';
+
+  // MEDIA_SOURCE=cos 时 MEDIA_LIBRARY_ROOT 为可选（仅导入/同步时需要）；local 模式下仍为必填
+  const libraryRootRaw = mediaSource === 'local'
+    ? requireEnv(env, 'MEDIA_LIBRARY_ROOT')
+    : (env.MEDIA_LIBRARY_ROOT?.trim() ?? '');
 
   return {
     apiPort: Number.parseInt(env.API_PORT ?? '8787', 10),
@@ -46,8 +51,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.c
       env.DATABASE_PATH,
       path.join(workspaceRoot, 'var', 'video-game-music.sqlite'),
     ),
-    mediaSource: env.MEDIA_SOURCE === 'cos' ? 'cos' : 'local',
-    libraryRoot: resolveFromWorkspace(workspaceRoot, libraryRoot, libraryRoot),
+    mediaSource,
+    libraryRoot: libraryRootRaw ? resolveFromWorkspace(workspaceRoot, libraryRootRaw, libraryRootRaw) : '',
     mediaCacheDir: resolveFromWorkspace(
       workspaceRoot,
       env.MEDIA_CACHE_DIR,
