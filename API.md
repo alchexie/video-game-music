@@ -2,8 +2,8 @@
 
 本文档描述了 Video Game Music 后端服务提供的所有 REST API 接口。
 
-- **默认端口**：`8787`（可通过环境变量 `API_PORT` 修改）
-- **Base URL**：`http://localhost:8787`
+- **默认端口**：`5005`（可通过环境变量 `API_PORT` 修改）
+- **Base URL**：`http://localhost:5005`
 - **数据格式**：所有请求和响应均使用 `application/json`（媒体流和图片接口除外）
 
 ---
@@ -80,8 +80,8 @@
       "year": 2007,
       "genre": "Game",
       "coverAssetId": "01960a11-...",
-      "streamUrl": "http://localhost:8787/api/tracks/01960b2a-.../stream",
-      "coverUrl": "http://localhost:8787/api/assets/01960a11-.../cover"
+      "streamUrl": "http://localhost:5005/api/tracks/01960b2a-.../stream",
+      "coverUrl": "http://localhost:5005/api/assets/01960a11-.../cover"
     }
   ],
   "total": 128,
@@ -259,7 +259,7 @@ GET /api/tracks/search?albumId=01960a11-...&discNumber=1&trackNumber=3
       "coverAssetId": "01960a11-...",
       "seriesId": "01960a00-...",
       "seriesName": "Pokémon",
-      "coverUrl": "http://localhost:8787/api/assets/01960a11-.../cover"
+      "coverUrl": "http://localhost:5005/api/assets/01960a11-.../cover"
     }
   ],
   "total": 32,

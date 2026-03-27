@@ -47,6 +47,7 @@ export async function createApp() {
   const config = loadConfig(process.env, process.cwd());
   const app = Fastify({
     logger: true,
+    trustProxy: true,
   });
 
   await app.register(cors, {
@@ -92,7 +93,7 @@ export async function createApp() {
       offset: offset !== undefined ? Number(offset) : 0,
     });
 
-    const baseUrl = `${request.protocol}://${request.headers.host}`;
+    const baseUrl = config.baseUrl ?? `${request.protocol}://${request.headers.host}`;
     return {
       ...result,
       items: result.items.map((album) => ({
@@ -159,7 +160,7 @@ export async function createApp() {
       offset: offset !== undefined ? Number(offset) : 0,
     });
 
-    const baseUrl = `${request.protocol}://${request.headers.host}`;
+    const baseUrl = config.baseUrl ?? `${request.protocol}://${request.headers.host}`;
     return {
       ...result,
       items: result.items.map((track) => ({

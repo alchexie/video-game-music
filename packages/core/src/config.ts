@@ -11,6 +11,8 @@ export interface AppConfig {
   libraryRoot: string;
   mediaCacheDir: string;
   adminToken?: string;
+  /** 服务对外暴露的 Base URL，用于生成 streamUrl/coverUrl。未配置时从请求头自动推断。 */
+  baseUrl?: string;
   cosBucket?: string;
   cosRegion?: string;
   cosSecretId?: string;
@@ -59,6 +61,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.c
       path.join(workspaceRoot, 'var', 'media-cache'),
     ),
     adminToken: env.ADMIN_TOKEN?.trim() || undefined,
+    baseUrl: env.BASE_URL?.trim().replace(/\/$/, '') || undefined,
     cosBucket: env.COS_BUCKET?.trim() || undefined,
     cosRegion: env.COS_REGION?.trim() || undefined,
     cosSecretId: env.COS_SECRET_ID?.trim() || undefined,
