@@ -20,6 +20,7 @@ const imgError = ref(false)
           :src="logoUrl"
           :alt="series.name"
           class="series-logo-img"
+          loading="lazy"
           @error="imgError = true"
         />
         <div v-else class="series-card-placeholder">

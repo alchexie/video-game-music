@@ -14,6 +14,7 @@ defineProps<{
           v-if="collection.coverAssetId"
           :src="`/api/assets/${collection.coverAssetId}/cover`"
           :alt="collection.title"
+          loading="lazy"
         />
         <div v-else class="cover-fallback">🎵</div>
         <div class="media-card-play-overlay">

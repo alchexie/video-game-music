@@ -24,6 +24,7 @@ function onPlayClick(e: MouseEvent) {
           v-if="album.coverAssetId"
           :src="`/api/assets/${album.coverAssetId}/cover`"
           :alt="album.title"
+          loading="lazy"
         />
         <div v-else class="cover-fallback">🎮</div>
         <div class="media-card-play-overlay">
