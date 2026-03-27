@@ -162,6 +162,50 @@ export interface SearchResult {
   tracks: Array<TrackListItem & { albumId?: string; albumTitle?: string }>;
 }
 
+export interface AlbumSearchItem {
+  publicId: string;
+  title: string;
+  albumArtist: string;
+  year?: number;
+  trackCount: number;
+  discCount: number;
+  coverAssetId?: string;
+  seriesId?: string;
+  seriesName?: string;
+  coverUrl?: string;
+}
+
+export interface AlbumsSearchResult {
+  items: AlbumSearchItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface TrackSearchItem {
+  publicId: string;
+  title: string;
+  artist: string;
+  durationSeconds: number;
+  trackNumber: number;
+  discNumber: number;
+  discTitle?: string;
+  mediaAssetId: string;
+  albumId?: string;
+  albumTitle?: string;
+  albumArtist?: string;
+  year?: number;
+  genre?: string;
+  coverAssetId?: string;
+}
+
+export interface TracksSearchResult {
+  items: TrackSearchItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export interface LibraryScanChange {
   sourceKey: string;
   relativePath: string;

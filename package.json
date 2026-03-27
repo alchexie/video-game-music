@@ -9,6 +9,7 @@
     "dev:api": "pnpm --filter @vgm/api dev",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
+    "test:api": "pnpm --filter @vgm/api test",
     "check": "pnpm -r typecheck",
     "import:init": "pnpm --filter @vgm/media-importer run init",
     "import:update": "pnpm --filter @vgm/media-importer run update",

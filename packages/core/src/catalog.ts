@@ -1,11 +1,15 @@
 import type {
   AlbumDetail,
   AlbumListItem,
+  AlbumSearchItem,
+  AlbumsSearchResult,
   CollectionDetail,
   SearchResult,
   SeriesDetail,
   SeriesListItem,
   TrackListItem,
+  TrackSearchItem,
+  TracksSearchResult,
 } from '@vgm/shared';
 
 import {
@@ -313,6 +317,237 @@ export async function searchCatalog(context: DatabaseContext, query: string): Pr
       };
     }),
   };
+}
+
+export interface AlbumSearchFilters {
+  /** 按专辑标题关键词搜索（模糊匹配） */
+  q?: string;
+  /** 按专辑艺术家名称关键词筛选（模糊匹配） */
+  artist?: string;
+  /** 按流派关键词筛选（模糊匹配） */
+  genre?: string;
+  /** 按发行年份精确筛选 */
+  year?: number;
+  /** 按系列 publicId 精确筛选 */
+  seriesId?: string;
+  /** 返回结果数量上限，默认 20，最大 100 */
+  limit?: number;
+  /** 分页偏移量，默认 0 */
+  offset?: number;
+}
+
+export async function searchAlbums(
+  context: DatabaseContext,
+  filters: AlbumSearchFilters,
+): Promise<AlbumsSearchResult> {
+  const { q, artist, genre, year, seriesId, limit = 20, offset = 0 } = filters;
+  const clampedLimit = Math.min(Math.max(1, Number(limit) || 20), 100);
+  const safeOffset = Math.max(0, Number(offset) || 0);
+
+  const joinParts: string[] = [
+    'LEFT JOIN albumTracks at ON at.albumId = a.publicId',
+  ];
+  const conditions: string[] = ['a.hidden = 0', 'a.isSystemGenerated = 1'];
+  const params: unknown[] = [];
+
+  if (seriesId) {
+    joinParts.push('INNER JOIN seriesAlbums sa ON sa.albumId = a.publicId');
+    conditions.push('sa.seriesId = ?');
+    params.push(seriesId);
+  }
+
+  if (q?.trim()) {
+    const kw = `%${q.trim()}%`;
+    conditions.push("(a.title LIKE ? OR COALESCE(a.displayTitle, '') LIKE ?)");
+    params.push(kw, kw);
+  }
+
+  if (artist?.trim()) {
+    const kw = `%${artist.trim()}%`;
+    conditions.push("(a.albumArtist LIKE ? OR COALESCE(a.displayArtist, '') LIKE ?)");
+    params.push(kw, kw);
+  }
+
+  if (genre?.trim()) {
+    const kw = `%${genre.trim()}%`;
+    joinParts.push('LEFT JOIN tracks t ON t.publicId = at.trackId');
+    conditions.push('t.genre LIKE ?');
+    params.push(kw);
+  }
+
+  if (year !== undefined && !Number.isNaN(Number(year))) {
+    conditions.push('a.year = ?');
+    params.push(Number(year));
+  }
+
+  const joinClause = joinParts.join('\n    ');
+  const whereClause = `WHERE ${conditions.join(' AND ')}`;
+
+  const countRow = get<Record<string, unknown>>(context, `
+    SELECT COUNT(DISTINCT a.publicId) AS total
+    FROM albums a
+    ${joinClause}
+    ${whereClause}
+  `, params);
+
+  const total = Number(countRow?.total ?? 0);
+
+  const rows = all<Record<string, unknown>>(context, `
+    SELECT
+      a.*,
+      COUNT(DISTINCT at.trackId) AS trackCount,
+      COUNT(DISTINCT at.discNumber) AS discCount,
+      sa2.seriesId AS seriesPublicId,
+      s.name AS seriesName
+    FROM albums a
+    ${joinClause}
+    LEFT JOIN seriesAlbums sa2 ON sa2.albumId = a.publicId
+    LEFT JOIN series s ON s.publicId = sa2.seriesId
+    ${whereClause}
+    GROUP BY a.publicId
+    ORDER BY a.sortTitle ASC, a.year ASC
+    LIMIT ? OFFSET ?
+  `, [...params, clampedLimit, safeOffset]);
+
+  const items: AlbumSearchItem[] = rows.map((row) => {
+    const album = mapAlbum(row);
+    return {
+      publicId: album.publicId,
+      title: albumLabel(album),
+      albumArtist: albumArtistLabel(album),
+      year: album.year,
+      trackCount: Number(row.trackCount ?? 0),
+      discCount: Number(row.discCount ?? 0),
+      coverAssetId: album.coverAssetId,
+      seriesId: typeof row.seriesPublicId === 'string' ? row.seriesPublicId : undefined,
+      seriesName: typeof row.seriesName === 'string' ? row.seriesName : undefined,
+    };
+  });
+
+  return { items, total, limit: clampedLimit, offset: safeOffset };
+}
+
+export interface TrackSearchFilters {
+  /** 按曲目标题关键词搜索（模糊匹配） */
+  q?: string;
+  /** 按专辑名称关键词筛选（模糊匹配） */
+  album?: string;
+  /** 按艺术家名称关键词筛选（模糊匹配） */
+  artist?: string;
+  /** 按流派关键词筛选（模糊匹配） */
+  genre?: string;
+  /** 按发行年份精确筛选 */
+  year?: number;
+  /** 按系列 publicId 精确筛选 */
+  seriesId?: string;
+  /** 返回结果数量上限，默认 20，最大 100 */
+  limit?: number;
+  /** 分页偏移量，默认 0 */
+  offset?: number;
+}
+
+export async function searchTracks(
+  context: DatabaseContext,
+  filters: TrackSearchFilters,
+): Promise<TracksSearchResult> {
+  const { q, album, artist, genre, year, seriesId, limit = 20, offset = 0 } = filters;
+  const clampedLimit = Math.min(Math.max(1, Number(limit) || 20), 100);
+  const safeOffset = Math.max(0, Number(offset) || 0);
+
+  // Build dynamic JOIN / WHERE clauses
+  const joinParts: string[] = [
+    'LEFT JOIN albumTracks at ON at.trackId = t.publicId',
+    'LEFT JOIN albums a ON a.publicId = at.albumId AND a.hidden = 0',
+  ];
+  const conditions: string[] = ['t.hidden = 0'];
+  const params: unknown[] = [];
+
+  if (seriesId) {
+    joinParts.push('INNER JOIN seriesAlbums sa ON sa.albumId = a.publicId');
+    conditions.push('sa.seriesId = ?');
+    params.push(seriesId);
+  }
+
+  if (q?.trim()) {
+    const kw = `%${q.trim()}%`;
+    conditions.push("(t.title LIKE ? OR COALESCE(t.displayTitle, '') LIKE ?)");
+    params.push(kw, kw);
+  }
+
+  if (album?.trim()) {
+    const kw = `%${album.trim()}%`;
+    conditions.push("(a.title LIKE ? OR COALESCE(a.displayTitle, '') LIKE ?)");
+    params.push(kw, kw);
+  }
+
+  if (artist?.trim()) {
+    const kw = `%${artist.trim()}%`;
+    conditions.push("(t.artist LIKE ? OR COALESCE(t.displayArtist, '') LIKE ?)");
+    params.push(kw, kw);
+  }
+
+  if (genre?.trim()) {
+    const kw = `%${genre.trim()}%`;
+    conditions.push('t.genre LIKE ?');
+    params.push(kw);
+  }
+
+  if (year !== undefined && !Number.isNaN(Number(year))) {
+    conditions.push('t.year = ?');
+    params.push(Number(year));
+  }
+
+  const joinClause = joinParts.join('\n    ');
+  const whereClause = `WHERE ${conditions.join(' AND ')}`;
+
+  const countRow = get<Record<string, unknown>>(context, `
+    SELECT COUNT(DISTINCT t.publicId) AS total
+    FROM tracks t
+    ${joinClause}
+    ${whereClause}
+  `, params);
+
+  const total = Number(countRow?.total ?? 0);
+
+  const rows = all<Record<string, unknown>>(context, `
+    SELECT
+      t.*,
+      at.trackNumber,
+      at.discNumber,
+      at.discTitle,
+      a.publicId AS albumPublicId,
+      COALESCE(a.displayTitle, a.title) AS albumTitle,
+      COALESCE(a.displayArtist, a.albumArtist) AS albumArtist,
+      a.coverAssetId AS albumCoverAssetId
+    FROM tracks t
+    ${joinClause}
+    ${whereClause}
+    GROUP BY t.publicId
+    ORDER BY COALESCE(t.displayTitle, t.title) ASC
+    LIMIT ? OFFSET ?
+  `, [...params, clampedLimit, safeOffset]);
+
+  const items: TrackSearchItem[] = rows.map((row) => {
+    const track = mapTrack(row);
+    return {
+      publicId: track.publicId,
+      title: trackLabel(track),
+      artist: artistLabel(track),
+      durationSeconds: track.durationSeconds,
+      trackNumber: Number(row.trackNumber ?? track.sourceMeta.trackNumber ?? 0),
+      discNumber: Number(row.discNumber ?? track.sourceMeta.discNumber ?? 0),
+      discTitle: typeof row.discTitle === 'string' ? row.discTitle : undefined,
+      mediaAssetId: track.mediaAssetId,
+      albumId: typeof row.albumPublicId === 'string' ? row.albumPublicId : undefined,
+      albumTitle: typeof row.albumTitle === 'string' ? row.albumTitle : undefined,
+      albumArtist: typeof row.albumArtist === 'string' ? row.albumArtist : undefined,
+      year: track.year,
+      genre: track.genre,
+      coverAssetId: typeof row.albumCoverAssetId === 'string' ? row.albumCoverAssetId : undefined,
+    };
+  });
+
+  return { items, total, limit: clampedLimit, offset: safeOffset };
 }
 
 export async function patchTrack(context: DatabaseContext, trackId: string, input: Record<string, unknown>) {

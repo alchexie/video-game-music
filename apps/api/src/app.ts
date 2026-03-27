@@ -20,7 +20,9 @@ import {
   resolveCoverAsset,
   resolveTrackEmbeddedCover,
   resolveTrackStream,
+  searchAlbums,
   searchCatalog,
+  searchTracks,
   syncMediaToCos,
 } from '@vgm/core';
 import {
@@ -64,6 +66,38 @@ export async function createApp() {
 
   app.get('/api/health', async () => ({ ok: true }));
 
+  app.get('/api/albums/search', async (request) => {
+    const context = await getDatabase(config);
+    const { q, artist, genre, year, seriesId, limit, offset } = request.query as {
+      q?: string;
+      artist?: string;
+      genre?: string;
+      year?: string;
+      seriesId?: string;
+      limit?: string;
+      offset?: string;
+    };
+
+    const result = await searchAlbums(context, {
+      q,
+      artist,
+      genre,
+      year: year !== undefined ? Number(year) : undefined,
+      seriesId,
+      limit: limit !== undefined ? Number(limit) : 20,
+      offset: offset !== undefined ? Number(offset) : 0,
+    });
+
+    const baseUrl = `${request.protocol}://${request.headers.host}`;
+    return {
+      ...result,
+      items: result.items.map((album) => ({
+        ...album,
+        coverUrl: album.coverAssetId ? `${baseUrl}/api/assets/${album.coverAssetId}/cover` : undefined,
+      })),
+    };
+  });
+
   app.get('/api/albums', async () => {
     const context = await getDatabase(config);
     return listAlbums(context);
@@ -91,6 +125,41 @@ export async function createApp() {
     }
 
     return album.tracks;
+  });
+
+  app.get('/api/tracks/search', async (request) => {
+    const context = await getDatabase(config);
+    const { q, album, artist, genre, year, seriesId, limit, offset } = request.query as {
+      q?: string;
+      album?: string;
+      artist?: string;
+      genre?: string;
+      year?: string;
+      seriesId?: string;
+      limit?: string;
+      offset?: string;
+    };
+
+    const result = await searchTracks(context, {
+      q,
+      album,
+      artist,
+      genre,
+      year: year !== undefined ? Number(year) : undefined,
+      seriesId,
+      limit: limit !== undefined ? Number(limit) : 20,
+      offset: offset !== undefined ? Number(offset) : 0,
+    });
+
+    const baseUrl = `${request.protocol}://${request.headers.host}`;
+    return {
+      ...result,
+      items: result.items.map((track) => ({
+        ...track,
+        streamUrl: `${baseUrl}/api/tracks/${track.publicId}/stream`,
+        coverUrl: track.coverAssetId ? `${baseUrl}/api/assets/${track.coverAssetId}/cover` : undefined,
+      })),
+    };
   });
 
   app.get('/api/tracks/:id', async (request, reply) => {
