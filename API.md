@@ -47,14 +47,16 @@
 
 | 参数       | 类型     | 必填 | 说明                                             |
 | ---------- | -------- | ---- | ------------------------------------------------ |
-| `q`        | `string` | 否   | 按曲目**标题**关键词模糊搜索（同时匹配展示标题） |
-| `album`    | `string` | 否   | 按**专辑名称**关键词模糊筛选                     |
-| `artist`   | `string` | 否   | 按**艺术家**名称关键词模糊筛选                   |
-| `genre`    | `string` | 否   | 按**流派**关键词模糊筛选                         |
-| `year`     | `number` | 否   | 按**发行年份**精确筛选                           |
-| `seriesId` | `string` | 否   | 按**系列** `publicId` 精确筛选                   |
-| `limit`    | `number` | 否   | 每页返回数量，默认 `20`，最大 `100`              |
-| `offset`   | `number` | 否   | 分页偏移量，默认 `0`                             |
+| `q`          | `string` | 否   | 按曲目**标题**关键词模糊搜索（同时匹配展示标题） |
+| `album`      | `string` | 否   | 按**专辑名称**关键词模糊筛选                     |
+| `artist`     | `string` | 否   | 按**艺术家**名称关键词模糊筛选                   |
+| `genre`      | `string` | 否   | 按**流派**关键词模糊筛选                         |
+| `year`       | `number` | 否   | 按**发行年份**精确筛选                           |
+| `seriesId`   | `string` | 否   | 按**系列** `publicId` 精确筛选                   |
+| `discNumber` | `number` | 否   | 按**碟片号**精确筛选                             |
+| `trackNumber`| `number` | 否   | 按**曲目号**精确筛选                             |
+| `limit`      | `number` | 否   | 每页返回数量，默认 `20`，最大 `100`              |
+| `offset`     | `number` | 否   | 分页偏移量，默认 `0`                             |
 
 > 所有参数均可组合使用，多个条件取交集（AND）。若所有参数均为空，则返回全部曲目。
 
@@ -120,6 +122,12 @@ GET /api/tracks/search?album=Diamond&artist=Ichinose
 
 # 搜索特定系列下2006年发行的所有曲目（分页）
 GET /api/tracks/search?seriesId=01960a00-...&year=2006&limit=50&offset=0
+
+# 获取某专辑第2碟的所有曲目
+GET /api/tracks/search?album=Diamond&discNumber=2
+
+# 获取某专辑第1碟第3首曲目
+GET /api/tracks/search?albumId=01960a11-...&discNumber=1&trackNumber=3
 ```
 
 ---

@@ -133,13 +133,15 @@ export async function createApp() {
 
   app.get('/api/tracks/search', async (request) => {
     const context = await getDatabase(config);
-    const { q, album, artist, genre, year, seriesId, limit, offset } = request.query as {
+    const { q, album, artist, genre, year, seriesId, discNumber, trackNumber, limit, offset } = request.query as {
       q?: string;
       album?: string;
       artist?: string;
       genre?: string;
       year?: string;
       seriesId?: string;
+      discNumber?: string;
+      trackNumber?: string;
       limit?: string;
       offset?: string;
     };
@@ -151,6 +153,8 @@ export async function createApp() {
       genre,
       year: year !== undefined ? Number(year) : undefined,
       seriesId,
+      discNumber: discNumber !== undefined ? Number(discNumber) : undefined,
+      trackNumber: trackNumber !== undefined ? Number(trackNumber) : undefined,
       limit: limit !== undefined ? Number(limit) : 20,
       offset: offset !== undefined ? Number(offset) : 0,
     });

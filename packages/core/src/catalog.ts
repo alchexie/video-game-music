@@ -440,6 +440,10 @@ export interface TrackSearchFilters {
   year?: number;
   /** 按系列 publicId 精确筛选 */
   seriesId?: string;
+  /** 按碟片号精确筛选 */
+  discNumber?: number;
+  /** 按曲目号精确筛选 */
+  trackNumber?: number;
   /** 返回结果数量上限，默认 20，最大 100 */
   limit?: number;
   /** 分页偏移量，默认 0 */
@@ -450,7 +454,7 @@ export async function searchTracks(
   context: DatabaseContext,
   filters: TrackSearchFilters,
 ): Promise<TracksSearchResult> {
-  const { q, album, artist, genre, year, seriesId, limit = 20, offset = 0 } = filters;
+  const { q, album, artist, genre, year, seriesId, discNumber, trackNumber, limit = 20, offset = 0 } = filters;
   const clampedLimit = Math.min(Math.max(1, Number(limit) || 20), 100);
   const safeOffset = Math.max(0, Number(offset) || 0);
 
@@ -495,6 +499,16 @@ export async function searchTracks(
   if (year !== undefined && !Number.isNaN(Number(year))) {
     conditions.push('t.year = ?');
     params.push(Number(year));
+  }
+
+  if (discNumber !== undefined && !Number.isNaN(Number(discNumber))) {
+    conditions.push('at.discNumber = ?');
+    params.push(Number(discNumber));
+  }
+
+  if (trackNumber !== undefined && !Number.isNaN(Number(trackNumber))) {
+    conditions.push('at.trackNumber = ?');
+    params.push(Number(trackNumber));
   }
 
   const joinClause = joinParts.join('\n    ');
