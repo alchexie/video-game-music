@@ -18,8 +18,6 @@
 3. 安装依赖：`pnpm install`
 4. 启动前后端：`pnpm dev`
 
-默认 API 监听 `http://127.0.0.1:8787`，前端开发服务器监听 `http://localhost:5173`。SQLite 数据库默认写入 `./var/video-game-music.sqlite`，不依赖外部数据库服务。
-
 
 ## 资源导入
 
