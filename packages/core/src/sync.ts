@@ -3,8 +3,24 @@ import path from 'node:path';
 import COS from 'cos-nodejs-sdk-v5';
 
 import type { AppConfig } from './config.js';
-import { all, mapMediaAsset, run } from './db.js';
+import { all, mapMediaAsset, prepare, run, transaction } from './db.js';
 import type { DatabaseContext } from './db.js';
+
+const UPLOAD_CONCURRENCY = 6;
+const MAX_RETRIES = 2;
+
+function isRetryableError(error: unknown): boolean {
+  if (error && typeof error === 'object') {
+    const code = (error as Record<string, unknown>).statusCode ?? (error as Record<string, unknown>).code;
+    if (typeof code === 'number' && code >= 500) return true;
+    if (code === 'ECONNRESET' || code === 'ETIMEDOUT' || code === 'EPIPE') return true;
+  }
+  return false;
+}
+
+async function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export async function uploadMediaToCos(context: DatabaseContext, config: AppConfig) {
   if (!config.cosBucket || !config.cosRegion || !config.cosSecretId || !config.cosSecretKey) {
@@ -22,43 +38,75 @@ export async function uploadMediaToCos(context: DatabaseContext, config: AppConf
     WHERE presenceStatus = 'active'
       AND syncStatus != 'synced'
   `).map(mapMediaAsset);
-  const summary = {
-    uploadedAudio: 0,
-    failed: 0,
-  };
 
   const total = assets.length;
   console.log(`待上传文件：${total} 个`);
 
-  for (const [index, asset] of assets.entries()) {
-    const prefix = `[${index + 1}/${total}]`;
-    try {
+  const succeededIds: string[] = [];
+  const failedIds: string[] = [];
+  let nextIndex = 0;
+  let completedCount = 0;
+
+  async function worker() {
+    while (nextIndex < total) {
+      const i = nextIndex++;
+      const asset = assets[i]!;
+      const prefix = `[${i + 1}/${total}]`;
       const localAudioPath = path.join(config.libraryRoot, ...asset.relativePath.split('/'));
       const audioKey = `audio/${asset.publicId}${asset.extension}`;
+      let success = false;
 
-      process.stdout.write(`${prefix} 上传中 ${asset.relativePath} ...`);
-      await uploadFile(client, config, localAudioPath, audioKey);
-      process.stdout.write(' ✓\n');
-      summary.uploadedAudio += 1;
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          if (attempt === 0) {
+            process.stdout.write(`${prefix} 上传中 ${asset.relativePath} ...`);
+          } else {
+            process.stdout.write(`${prefix} 重试(${attempt}) ${asset.relativePath} ...`);
+          }
+          await uploadFile(client, config, localAudioPath, audioKey);
+          process.stdout.write(' ✓\n');
+          succeededIds.push(asset.publicId);
+          success = true;
+          break;
+        } catch (error) {
+          if (attempt < MAX_RETRIES && isRetryableError(error)) {
+            process.stdout.write(' ⟳\n');
+            await sleep(1000 * 2 ** attempt);
+            continue;
+          }
+          process.stdout.write(' ✗\n');
+          console.error(`${prefix} 失败 ${asset.relativePath}:`, error);
+        }
+      }
 
-      run(context, `
-        UPDATE mediaAssets
-        SET syncStatus = 'synced', updatedAt = ?
-        WHERE publicId = ?
-      `, [new Date().toISOString(), asset.publicId]);
-    } catch (error) {
-      process.stdout.write(' ✗\n');
-      summary.failed += 1;
-      run(context, `
-        UPDATE mediaAssets
-        SET syncStatus = 'failed', updatedAt = ?
-        WHERE publicId = ?
-      `, [new Date().toISOString(), asset.publicId]);
-      console.error(`${prefix} 失败 ${asset.relativePath}:`, error);
+      if (!success) {
+        failedIds.push(asset.publicId);
+      }
+
+      completedCount++;
     }
   }
 
-  return summary;
+  await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, total) }, worker));
+
+  // Batch DB updates in a single transaction
+  const now = new Date().toISOString();
+  transaction(context, () => {
+    const updateStmt = prepare(context, `
+      UPDATE mediaAssets SET syncStatus = ?, updatedAt = ? WHERE publicId = ?
+    `);
+    for (const id of succeededIds) {
+      updateStmt.run('synced', now, id);
+    }
+    for (const id of failedIds) {
+      updateStmt.run('failed', now, id);
+    }
+  });
+
+  return {
+    uploadedAudio: succeededIds.length,
+    failed: failedIds.length,
+  };
 }
 
 function uploadFile(client: COS, config: AppConfig, filePath: string, key: string) {

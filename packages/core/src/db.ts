@@ -177,6 +177,10 @@ export function run(context: DatabaseContext, sql: string, params: SqlValue[] = 
   return context.db.prepare(sql).run(...(params as any[]));
 }
 
+export function prepare(context: DatabaseContext, sql: string) {
+  return context.db.prepare(sql);
+}
+
 export function transaction<T>(context: DatabaseContext, work: () => T): T {
   context.db.exec('BEGIN');
   try {

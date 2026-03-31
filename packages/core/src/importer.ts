@@ -39,6 +39,7 @@ import {
   get,
   mapAlbum,
   mapMediaAsset,  mapSeries,  mapTrack,
+  prepare,
   run,
   transaction,
 } from './db.js';
@@ -59,6 +60,8 @@ interface ScannedCandidate {
 interface ScanInternalResult {
   summary: LibraryScanSummary;
   candidates: ScannedCandidate[];
+  existingAssets: MediaAssetRecord[];
+  existingTracks: TrackRecord[];
 }
 
 interface ProgressReporter {
@@ -211,7 +214,7 @@ export async function scanLibrary(context: DatabaseContext, options: ImportOptio
     elapsedMs: Date.now() - startedAt,
   });
 
-  return { summary, candidates };
+  return { summary, candidates, existingAssets, existingTracks };
 }
 
 export async function commitLibrary(context: DatabaseContext, config: AppConfig) {
@@ -223,10 +226,9 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
     onProgress: config.onImportProgress,
   });
 
-  const existingAssets = all<Record<string, unknown>>(context, 'SELECT * FROM mediaAssets').map(mapMediaAsset);
-  const assetMap = new Map(existingAssets.map((asset) => [asset.sourceKey, asset]));
-  const existingTracks = all<Record<string, unknown>>(context, 'SELECT * FROM tracks').map(mapTrack);
-  const trackMap = new Map(existingTracks.map((track) => [track.mediaAssetId, track]));
+  // Reuse data already loaded during scan instead of re-querying
+  const assetMap = new Map(scan.existingAssets.map((asset) => [asset.sourceKey, asset]));
+  const trackMap = new Map(scan.existingTracks.map((track) => [track.mediaAssetId, track]));
   const now = new Date().toISOString();
 
   reportProgress(config, {
@@ -238,7 +240,54 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
   });
 
   const activeSourceKeys = new Set(scan.candidates.map((candidate) => candidate.sourceKey));
-  const missingAssets = existingAssets.filter((asset) => !activeSourceKeys.has(asset.sourceKey) && asset.presenceStatus === 'active');
+  const missingAssets = scan.existingAssets.filter((asset) => !activeSourceKeys.has(asset.sourceKey) && asset.presenceStatus === 'active');
+
+  // Prepare statements once, reuse in loop
+  const insertAssetStmt = prepare(context, `
+    INSERT INTO mediaAssets (
+      publicId, sourceKey, relativePath, extension, mimeType, fileSize, modifiedAt, contentHash,
+      syncStatus, presenceStatus, createdAt, updatedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(sourceKey) DO UPDATE SET
+      publicId = excluded.publicId,
+      relativePath = excluded.relativePath,
+      extension = excluded.extension,
+      mimeType = excluded.mimeType,
+      fileSize = excluded.fileSize,
+      modifiedAt = excluded.modifiedAt,
+      contentHash = excluded.contentHash,
+      syncStatus = excluded.syncStatus,
+      presenceStatus = excluded.presenceStatus,
+      createdAt = excluded.createdAt,
+      updatedAt = excluded.updatedAt
+  `);
+
+  const insertTrackStmt = prepare(context, `
+    INSERT INTO tracks (
+      publicId, mediaAssetId, title, artist, durationSeconds, format, year, genre, sourceMeta,
+      displayTitle, displayArtist, hidden, createdAt, updatedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(mediaAssetId) DO UPDATE SET
+      publicId = excluded.publicId,
+      title = excluded.title,
+      artist = excluded.artist,
+      durationSeconds = excluded.durationSeconds,
+      format = excluded.format,
+      year = excluded.year,
+      genre = excluded.genre,
+      sourceMeta = excluded.sourceMeta,
+      displayTitle = excluded.displayTitle,
+      displayArtist = excluded.displayArtist,
+      hidden = excluded.hidden,
+      createdAt = excluded.createdAt,
+      updatedAt = excluded.updatedAt
+  `);
+
+  const markMissingStmt = prepare(context, `
+    UPDATE mediaAssets
+    SET presenceStatus = 'missing', syncStatus = 'pending', updatedAt = ?
+    WHERE sourceKey = ?
+  `);
 
   transaction(context, () => {
     for (const [index, candidate] of scan.candidates.entries()) {
@@ -246,106 +295,38 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
       const assetPublicId = existingAsset?.publicId ?? uuidv7();
       const unchanged = existingAsset?.fileSize === candidate.fileSize && existingAsset.modifiedAt === candidate.modifiedAt;
 
-      const assetRecord: MediaAssetRecord = {
-        publicId: assetPublicId,
-        sourceKey: candidate.sourceKey,
-        relativePath: candidate.relativePath,
-        extension: candidate.extension,
-        mimeType: candidate.mimeType,
-        fileSize: candidate.fileSize,
-        modifiedAt: candidate.modifiedAt,
-        contentHash: unchanged ? existingAsset?.contentHash : undefined,
-        syncStatus: unchanged ? (existingAsset?.syncStatus ?? 'pending') : 'pending',
-        presenceStatus: 'active',
-        createdAt: existingAsset?.createdAt ?? now,
-        updatedAt: now,
-      };
-
-      run(context, `
-      INSERT INTO mediaAssets (
-        publicId, sourceKey, relativePath, extension, mimeType, fileSize, modifiedAt, contentHash,
-        syncStatus, presenceStatus, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(sourceKey) DO UPDATE SET
-        publicId = excluded.publicId,
-        relativePath = excluded.relativePath,
-        extension = excluded.extension,
-        mimeType = excluded.mimeType,
-        fileSize = excluded.fileSize,
-        modifiedAt = excluded.modifiedAt,
-        contentHash = excluded.contentHash,
-        syncStatus = excluded.syncStatus,
-        presenceStatus = excluded.presenceStatus,
-        createdAt = excluded.createdAt,
-        updatedAt = excluded.updatedAt
-    `, [
-        assetRecord.publicId,
-        assetRecord.sourceKey,
-        assetRecord.relativePath,
-        assetRecord.extension,
-        assetRecord.mimeType,
-        assetRecord.fileSize,
-        assetRecord.modifiedAt,
-        assetRecord.contentHash ?? null,
-        assetRecord.syncStatus,
-        assetRecord.presenceStatus,
-        assetRecord.createdAt,
-        assetRecord.updatedAt,
-      ]);
+      insertAssetStmt.run(
+        assetPublicId,
+        candidate.sourceKey,
+        candidate.relativePath,
+        candidate.extension,
+        candidate.mimeType,
+        candidate.fileSize,
+        candidate.modifiedAt,
+        unchanged ? (existingAsset?.contentHash ?? null) : null,
+        unchanged ? (existingAsset?.syncStatus ?? 'pending') : 'pending',
+        'active',
+        existingAsset?.createdAt ?? now,
+        now,
+      );
 
       const existingTrack = trackMap.get(assetPublicId);
-      const trackRecord: TrackRecord = {
-        publicId: existingTrack?.publicId ?? uuidv7(),
-        mediaAssetId: assetPublicId,
-        title: candidate.metadata.title,
-        artist: candidate.metadata.artist,
-        durationSeconds: candidate.metadata.durationSeconds ?? 0,
-        format: candidate.extension.replace('.', ''),
-        year: candidate.metadata.year,
-        genre: candidate.metadata.genre,
-        sourceMeta: candidate.metadata,
-        displayTitle: existingTrack?.displayTitle,
-        displayArtist: existingTrack?.displayArtist,
-        hidden: existingTrack?.hidden,
-        createdAt: existingTrack?.createdAt ?? now,
-        updatedAt: now,
-      };
-
-      run(context, `
-      INSERT INTO tracks (
-        publicId, mediaAssetId, title, artist, durationSeconds, format, year, genre, sourceMeta,
-        displayTitle, displayArtist, hidden, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(mediaAssetId) DO UPDATE SET
-        publicId = excluded.publicId,
-        title = excluded.title,
-        artist = excluded.artist,
-        durationSeconds = excluded.durationSeconds,
-        format = excluded.format,
-        year = excluded.year,
-        genre = excluded.genre,
-        sourceMeta = excluded.sourceMeta,
-        displayTitle = excluded.displayTitle,
-        displayArtist = excluded.displayArtist,
-        hidden = excluded.hidden,
-        createdAt = excluded.createdAt,
-        updatedAt = excluded.updatedAt
-    `, [
-        trackRecord.publicId,
-        trackRecord.mediaAssetId,
-        trackRecord.title,
-        trackRecord.artist,
-        trackRecord.durationSeconds,
-        trackRecord.format,
-        trackRecord.year ?? null,
-        trackRecord.genre ?? null,
-        encodeJson(trackRecord.sourceMeta),
-        trackRecord.displayTitle ?? null,
-        trackRecord.displayArtist ?? null,
-        trackRecord.hidden ? 1 : 0,
-        trackRecord.createdAt,
-        trackRecord.updatedAt,
-      ]);
+      insertTrackStmt.run(
+        existingTrack?.publicId ?? uuidv7(),
+        assetPublicId,
+        candidate.metadata.title,
+        candidate.metadata.artist,
+        candidate.metadata.durationSeconds ?? 0,
+        candidate.extension.replace('.', ''),
+        candidate.metadata.year ?? null,
+        candidate.metadata.genre ?? null,
+        encodeJson(candidate.metadata),
+        existingTrack?.displayTitle ?? null,
+        existingTrack?.displayArtist ?? null,
+        existingTrack?.hidden ? 1 : 0,
+        existingTrack?.createdAt ?? now,
+        now,
+      );
 
       if ((index + 1) % 100 === 0 || index === scan.candidates.length - 1) {
         reportProgress(config, {
@@ -359,11 +340,7 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
     }
 
     for (const asset of missingAssets) {
-      run(context, `
-        UPDATE mediaAssets
-        SET presenceStatus = 'missing', syncStatus = 'pending', updatedAt = ?
-        WHERE sourceKey = ?
-      `, [now, asset.sourceKey]);
+      markMissingStmt.run(now, asset.sourceKey);
     }
   });
 
@@ -479,31 +456,40 @@ async function rebuildAlbums(context: DatabaseContext, options: Pick<AppConfig, 
   const coversDir = path.join(options.mediaCacheDir, 'covers');
   await fs.mkdir(coversDir, { recursive: true });
 
-  for (const album of albumDocs) {
-    const destPath = path.join(coversDir, `${album.publicId}.png`);
-    let covered = false;
+  const COVER_CONCURRENCY = 6;
+  let nextCoverIndex = 0;
 
-    if (album.sourceDirectory) {
-      const albumDir = path.join(options.libraryRoot, ...album.sourceDirectory.split('/'));
-      const coverEntry = await findAlbumCoverFile(albumDir);
-      if (coverEntry) {
-        await resizeCoverToPng(coverEntry.absolutePath, destPath);
-        covered = true;
-      }
-    }
+  async function processCover() {
+    while (nextCoverIndex < albumDocs.length) {
+      const album = albumDocs[nextCoverIndex++]!;
+      const destPath = path.join(coversDir, `${album.publicId}.png`);
+      let covered = false;
 
-    if (!covered) {
-      const firstTrackPath = albumFirstTrackPath.get(album.publicId);
-      if (firstTrackPath) {
-        const tagMeta = await parseFile(firstTrackPath, { skipCovers: false, duration: false });
-        const picture = tagMeta.common.picture?.[0];
-        if (picture) {
-          await resizeCoverToPng(Buffer.from(picture.data), destPath);
+      if (album.sourceDirectory) {
+        const albumDir = path.join(options.libraryRoot, ...album.sourceDirectory.split('/'));
+        const coverEntry = await findAlbumCoverFile(albumDir);
+        if (coverEntry) {
+          await resizeCoverToPng(coverEntry.absolutePath, destPath);
           covered = true;
+        }
+      }
+
+      if (!covered) {
+        const firstTrackPath = albumFirstTrackPath.get(album.publicId);
+        if (firstTrackPath) {
+          try {
+            const tagMeta = await parseFile(firstTrackPath, { skipCovers: false, duration: false });
+            const picture = tagMeta.common.picture?.[0];
+            if (picture) {
+              await resizeCoverToPng(Buffer.from(picture.data), destPath);
+            }
+          } catch { /* skip failed cover extraction */ }
         }
       }
     }
   }
+
+  await Promise.all(Array.from({ length: Math.min(COVER_CONCURRENCY, albumDocs.length) }, processCover));
 
   reportProgress(options, {
     phase: 'rebuild',
@@ -547,6 +533,29 @@ async function rebuildAlbums(context: DatabaseContext, options: Pick<AppConfig, 
 
   const seriesIdMap = new Map(seriesDocs.map((s) => [s.seriesKey, s.publicId]));
 
+  // Prepare statements once for all inserts
+  const insertAlbumStmt = prepare(context, `
+    INSERT INTO albums (
+      publicId, albumKey, title, albumArtist, year, sourceDirectory, sourceMeta,
+      displayTitle, displayArtist, hidden, isSystemGenerated, sortTitle, createdAt, updatedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const insertAlbumTrackStmt = prepare(context, `
+    INSERT INTO albumTracks (albumId, trackId, discNumber, discTitle, trackNumber, sortOrder, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const insertSeriesStmt = prepare(context, `
+    INSERT INTO series (publicId, seriesKey, name, sortTitle, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+
+  const insertSeriesAlbumStmt = prepare(context, `
+    INSERT INTO seriesAlbums (seriesId, albumId, sortOrder, createdAt)
+    VALUES (?, ?, ?, ?)
+  `);
+
   transaction(context, () => {
     run(context, `DELETE FROM seriesAlbums`);
     run(context, `DELETE FROM series`);
@@ -554,12 +563,7 @@ async function rebuildAlbums(context: DatabaseContext, options: Pick<AppConfig, 
     run(context, `DELETE FROM albums WHERE isSystemGenerated = 1`);
 
     for (const album of albumDocs) {
-      run(context, `
-        INSERT INTO albums (
-          publicId, albumKey, title, albumArtist, year, sourceDirectory, sourceMeta,
-          displayTitle, displayArtist, hidden, isSystemGenerated, sortTitle, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
+      insertAlbumStmt.run(
         album.publicId,
         album.albumKey,
         album.title,
@@ -574,14 +578,11 @@ async function rebuildAlbums(context: DatabaseContext, options: Pick<AppConfig, 
         album.sortTitle,
         album.createdAt,
         album.updatedAt,
-      ]);
+      );
     }
 
     for (const link of albumTrackDocs) {
-      run(context, `
-        INSERT INTO albumTracks (albumId, trackId, discNumber, discTitle, trackNumber, sortOrder, createdAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `, [
+      insertAlbumTrackStmt.run(
         link.albumId,
         link.trackId,
         link.discNumber,
@@ -589,35 +590,29 @@ async function rebuildAlbums(context: DatabaseContext, options: Pick<AppConfig, 
         link.trackNumber,
         link.sortOrder,
         link.createdAt,
-      ]);
+      );
     }
 
     for (const series of seriesDocs) {
-      run(context, `
-        INSERT INTO series (publicId, seriesKey, name, sortTitle, createdAt, updatedAt)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `, [
+      insertSeriesStmt.run(
         series.publicId,
         series.seriesKey,
         series.name,
         series.sortTitle,
         series.createdAt,
         series.updatedAt,
-      ]);
+      );
     }
 
     for (const link of seriesAlbumLinks) {
       const seriesId = seriesIdMap.get(link.seriesKey);
       if (!seriesId) continue;
-      run(context, `
-        INSERT INTO seriesAlbums (seriesId, albumId, sortOrder, createdAt)
-        VALUES (?, ?, ?, ?)
-      `, [
+      insertSeriesAlbumStmt.run(
         seriesId,
         link.albumId,
         link.sortOrder ?? null,
         now,
-      ]);
+      );
     }
   });
 
