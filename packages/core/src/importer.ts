@@ -132,7 +132,7 @@ export async function scanLibrary(context: DatabaseContext, options: ImportOptio
           metadata: cached.sourceMeta,
         };
       } else {
-        candidates[i] = await buildCandidate(options.libraryRoot, absolutePath);
+        candidates[i] = await buildCandidate(options.libraryRoot, absolutePath, { size: stat.size, mtime: stat.mtime });
       }
 
       metaCompleted++;
@@ -303,6 +303,9 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
       const assetPublicId = existingAsset?.publicId ?? uuidv7();
       const unchanged = existingAsset?.fileSize === candidate.fileSize && existingAsset.modifiedAt === candidate.modifiedAt;
 
+      // contentHash match means audio data is identical — keep existing syncStatus
+      const syncStatus = existingAsset?.syncStatus ?? 'pending';
+
       insertAssetStmt.run(
         assetPublicId,
         candidate.relativePath,
@@ -311,7 +314,7 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
         candidate.fileSize,
         candidate.modifiedAt,
         candidate.contentHash,
-        unchanged ? (existingAsset?.syncStatus ?? 'pending') : 'pending',
+        syncStatus,
         'active',
         existingAsset?.createdAt ?? now,
         now,
@@ -660,9 +663,9 @@ async function walkAudioFiles(
   return files;
 }
 
-async function buildCandidate(libraryRoot: string, absolutePath: string): Promise<ScannedCandidate> {
+async function buildCandidate(libraryRoot: string, absolutePath: string, existingStat?: { size: number; mtime: Date }): Promise<ScannedCandidate> {
   const metadata = await parseFile(absolutePath, { duration: true, skipCovers: true });
-  const stat = await fs.stat(absolutePath);
+  const stat = existingStat ?? await fs.stat(absolutePath);
   const relativePath = normalizeRelativePath(libraryRoot, absolutePath);
   const extension = path.extname(absolutePath).toLowerCase();
   const common = metadata.common;
