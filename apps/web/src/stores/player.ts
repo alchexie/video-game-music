@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import type { TrackListItem } from '@vgm/shared'
+import { useAudioEngine } from '../composables/useAudioEngine'
 
 const DEFAULT_QUEUE_LABEL = '\u64ad\u653e\u961f\u5217'
 
@@ -9,17 +10,11 @@ export type PlayMode = 'sequential' | 'repeat-all' | 'repeat-one' | 'shuffle'
 const PLAY_MODES: PlayMode[] = ['sequential', 'repeat-all', 'repeat-one', 'shuffle']
 
 export const usePlayerStore = defineStore('player', () => {
-  const audio = ref<HTMLAudioElement | null>(null)
+  const engine = useAudioEngine()
   const queue = ref<TrackListItem[]>([])
   const currentIndex = ref(-1)
   const queueLabel = ref(DEFAULT_QUEUE_LABEL)
   const coverAssetId = ref<string | undefined>()
-  const embeddedCoverUrl = ref<string | undefined>()
-  const isPlaying = ref(false)
-  const currentTime = ref(0)
-  const duration = ref(0)
-  const volume = ref(1)
-  const isMuted = ref(false)
   const playMode = ref<PlayMode>('sequential')
 
   const currentTrack = computed(() => (
@@ -27,62 +22,19 @@ export const usePlayerStore = defineStore('player', () => {
   ))
 
   const activeCoverUrl = computed(() =>
-    embeddedCoverUrl.value
+    engine.embeddedCoverUrl.value
     ?? (coverAssetId.value ? `/api/assets/${coverAssetId.value}/cover` : undefined),
   )
 
-  let coverFetchSeq = 0
-
-  function syncVolume() {
-    if (audio.value) {
-      audio.value.volume = isMuted.value ? 0 : volume.value
-    }
-  }
-
   function bindAudio(element: HTMLAudioElement) {
-    audio.value = element
-    syncVolume()
-    element.addEventListener('play', () => { isPlaying.value = true })
-    element.addEventListener('pause', () => { isPlaying.value = false })
-    element.addEventListener('timeupdate', () => {
-      currentTime.value = element.currentTime
-      duration.value = Number.isFinite(element.duration) ? element.duration : 0
-    })
+    engine.bind(element)
     element.addEventListener('ended', () => { void next() })
   }
 
-  function setVolume(v: number) {
-    volume.value = Math.max(0, Math.min(1, v))
-    isMuted.value = false
-    syncVolume()
-  }
-
-  function toggleMute() {
-    isMuted.value = !isMuted.value
-    syncVolume()
-  }
-
   async function playCurrent() {
-    const element = audio.value
     const track = currentTrack.value
-    if (!element || !track) return
-    if (embeddedCoverUrl.value?.startsWith('blob:')) URL.revokeObjectURL(embeddedCoverUrl.value)
-    embeddedCoverUrl.value = undefined
-    element.src = `/api/tracks/${track.publicId}/stream`
-    await element.play()
-    const seq = ++coverFetchSeq
-    const trackId = track.publicId
-    void (async () => {
-      try {
-        const resp = await fetch(`/api/tracks/${trackId}/embedded-cover`)
-        if (seq !== coverFetchSeq || !resp.ok) return
-        const blob = await resp.blob()
-        if (seq !== coverFetchSeq) return
-        if (embeddedCoverUrl.value?.startsWith('blob:')) URL.revokeObjectURL(embeddedCoverUrl.value)
-        embeddedCoverUrl.value = URL.createObjectURL(blob)
-      }
-      catch { /* ignore */ }
-    })()
+    if (!track) return
+    await engine.play(track.publicId)
   }
 
   async function playQueue(
@@ -95,27 +47,20 @@ export const usePlayerStore = defineStore('player', () => {
     queueLabel.value = label
     coverAssetId.value = cover
     currentIndex.value = index
-    currentTime.value = 0
-    duration.value = 0
+    engine.currentTime.value = 0
+    engine.duration.value = 0
     await playCurrent()
-  }
-
-  async function toggle() {
-    const element = audio.value
-    if (!element) return
-    if (element.paused) { await element.play(); return }
-    element.pause()
   }
 
   async function previous() {
     const len = queue.value.length
     if (len === 0) return
     if (playMode.value === 'repeat-one') {
-      if (audio.value) { audio.value.currentTime = 0; await audio.value.play() }
+      await engine.restart()
       return
     }
     if (playMode.value === 'shuffle') {
-      if (len === 1) { if (audio.value) { audio.value.currentTime = 0; await audio.value.play() }; return }
+      if (len === 1) { await engine.restart(); return }
       let idx: number
       do { idx = Math.floor(Math.random() * len) } while (idx === currentIndex.value)
       currentIndex.value = idx
@@ -137,11 +82,11 @@ export const usePlayerStore = defineStore('player', () => {
     const len = queue.value.length
     if (len === 0) return
     if (playMode.value === 'repeat-one') {
-      if (audio.value) { audio.value.currentTime = 0; await audio.value.play() }
+      await engine.restart()
       return
     }
     if (playMode.value === 'shuffle') {
-      if (len === 1) { if (audio.value) { audio.value.currentTime = 0; await audio.value.play() }; return }
+      if (len === 1) { await engine.restart(); return }
       let idx: number
       do { idx = Math.floor(Math.random() * len) } while (idx === currentIndex.value)
       currentIndex.value = idx
@@ -164,12 +109,6 @@ export const usePlayerStore = defineStore('player', () => {
     playMode.value = PLAY_MODES[(idx + 1) % PLAY_MODES.length] as PlayMode
   }
 
-  function seek(ratio: number) {
-    const element = audio.value
-    if (!element || !duration.value) return
-    element.currentTime = Math.max(0, Math.min(duration.value, duration.value * ratio))
-  }
-
   return {
     queue,
     queueLabel,
@@ -177,26 +116,26 @@ export const usePlayerStore = defineStore('player', () => {
     currentIndex,
     currentTrack,
     activeCoverUrl,
-    isPlaying,
-    currentTime,
-    duration,
-    volume,
-    isMuted,
+    isPlaying: engine.isPlaying,
+    currentTime: engine.currentTime,
+    duration: engine.duration,
+    volume: engine.volume,
+    isMuted: engine.isMuted,
     bindAudio,
     playQueue,
     playAt: async (index: number) => {
       if (index < 0 || index >= queue.value.length) return
       currentIndex.value = index
-      currentTime.value = 0
-      duration.value = 0
+      engine.currentTime.value = 0
+      engine.duration.value = 0
       await playCurrent()
     },
-    toggle,
+    toggle: engine.toggle,
     previous,
     next,
-    seek,
-    setVolume,
-    toggleMute,
+    seek: engine.seek,
+    setVolume: engine.setVolume,
+    toggleMute: engine.toggleMute,
     playMode,
     toggleMode,
   }

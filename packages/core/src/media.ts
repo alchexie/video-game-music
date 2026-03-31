@@ -1,18 +1,30 @@
 import path from 'node:path';
 
-import COS from 'cos-nodejs-sdk-v5';
-import { parseFile } from 'music-metadata';
-import sharp from 'sharp';
-
 import type { AppConfig } from './config.js';
 import type { DatabaseContext } from './db.js';
 import { getMediaAssetById, getTrackById } from './catalog.js';
+import { CosStorageProvider } from './storage-cos.js';
+import { LocalStorageProvider } from './storage-local.js';
+import type { StorageProvider } from './storage.js';
 
 export interface StreamResolution {
   mode: 'local' | 'redirect';
   filePath?: string;
   mimeType?: string;
   redirectUrl?: string;
+}
+
+export function createStorageProvider(config: AppConfig): StorageProvider {
+  if (config.mediaSource === 'cos') {
+    return new CosStorageProvider(
+      config.cosBucket ?? '',
+      config.cosRegion ?? '',
+      config.cosSecretId,
+      config.cosSecretKey,
+    );
+  }
+
+  return new LocalStorageProvider(config.libraryRoot);
 }
 
 export async function resolveTrackStream(context: DatabaseContext, config: AppConfig, trackId: string): Promise<StreamResolution | null> {
@@ -26,22 +38,8 @@ export async function resolveTrackStream(context: DatabaseContext, config: AppCo
     return null;
   }
 
-  if (config.mediaSource === 'local') {
-    return {
-      mode: 'local',
-      filePath: path.join(config.libraryRoot, ...asset.relativePath.split('/')),
-      mimeType: asset.mimeType,
-    };
-  }
-
-  const cosKey = `audio/${asset.publicId}${asset.extension}`;
-  const redirectUrl = await resolveCosUrl(config, cosKey);
-  return redirectUrl
-    ? {
-      mode: 'redirect',
-      redirectUrl,
-    }
-    : null;
+  const provider = createStorageProvider(config);
+  return provider.resolveAudioStream(asset.publicId, asset.extension, asset.relativePath);
 }
 
 export async function resolveCoverAsset(_context: DatabaseContext, config: AppConfig, assetId: string): Promise<StreamResolution | null> {
@@ -73,38 +71,8 @@ export async function resolveTrackEmbeddedCover(
   if (!track) return null;
 
   const asset = await getMediaAssetById(context, track.mediaAssetId);
-  if (!asset || config.mediaSource !== 'local') return null;
+  if (!asset) return null;
 
-  const filePath = path.join(config.libraryRoot, ...asset.relativePath.split('/'));
-  const metadata = await parseFile(filePath, { skipCovers: false, duration: false });
-  const picture = metadata.common.picture?.[0];
-  if (!picture) return null;
-
-  return sharp(Buffer.from(picture.data))
-    .resize(512, 512, { fit: 'inside' })
-    .png()
-    .toBuffer();
-}
-
-async function resolveCosUrl(config: AppConfig, key?: string) {
-  if (!key || !config.cosBucket || !config.cosRegion) {
-    return undefined;
-  }
-
-  if (!config.cosSecretId || !config.cosSecretKey) {
-    return `https://${config.cosBucket}.cos.${config.cosRegion}.myqcloud.com/${key}`;
-  }
-
-  const client = new COS({
-    SecretId: config.cosSecretId,
-    SecretKey: config.cosSecretKey,
-  });
-
-  return client.getObjectUrl({
-    Bucket: config.cosBucket,
-    Region: config.cosRegion,
-    Key: key,
-    Sign: true,
-    Expires: 3600,
-  });
+  const provider = createStorageProvider(config);
+  return provider.resolveEmbeddedCover(asset.relativePath);
 }

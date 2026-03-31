@@ -250,3 +250,44 @@ export interface SyncOptions {
   cosSecretKey?: string;
   cosBasePrefix?: string;
 }
+
+// --- API Response DTOs ---
+// These types represent the shapes returned by API endpoints, including computed URL fields.
+
+export interface CollectionSummary {
+  publicId: string;
+  title: string;
+  description?: string;
+  status: CollectionStatus;
+  coverAssetId?: string;
+  trackCount: number;
+}
+
+export interface TrackSearchItemResponse extends TrackSearchItem {
+  streamUrl: string;
+  coverUrl?: string;
+}
+
+export interface TracksSearchResponse {
+  items: TrackSearchItemResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface AlbumSearchItemResponse extends AlbumSearchItem {
+  coverUrl?: string;
+}
+
+export interface AlbumsSearchResponse {
+  items: AlbumSearchItemResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface ApiErrorResponse {
+  code: string;
+  message: string;
+  details?: unknown;
+}

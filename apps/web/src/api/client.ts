@@ -1,17 +1,17 @@
 import axios from 'axios'
 
-import type { AlbumDetail, AlbumListItem, CollectionDetail, SearchResult, SeriesDetail, SeriesListItem, TrackRecord } from '@vgm/shared'
+import type {
+  AlbumDetail,
+  AlbumListItem,
+  CollectionDetail,
+  CollectionSummary,
+  SearchResult,
+  SeriesDetail,
+  SeriesListItem,
+  TrackRecord,
+} from '@vgm/shared'
 
-export interface CollectionSummary {
-  publicId: string
-  title: string
-  description?: string
-  status: 'draft' | 'published'
-  coverAssetId?: string
-  trackCount: number
-}
-
-export type { SeriesListItem, SeriesDetail }
+export type { CollectionSummary, SeriesListItem, SeriesDetail }
 
 const api = axios.create({
   baseURL: '/api',

@@ -2,6 +2,29 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { config as loadDotEnvFile } from 'dotenv';
+import { z } from 'zod';
+
+const envSchema = z.object({
+  API_PORT: z.string().regex(/^\d+$/).default('8787'),
+  MEDIA_SOURCE: z.enum(['local', 'cos']).default('local'),
+  MEDIA_LIBRARY_ROOT: z.string().trim().optional(),
+  DATABASE_PATH: z.string().trim().optional(),
+  MEDIA_CACHE_DIR: z.string().trim().optional(),
+  ADMIN_TOKEN: z.string().trim().optional(),
+  BASE_URL: z.string().trim().optional(),
+  COS_BUCKET: z.string().trim().optional(),
+  COS_REGION: z.string().trim().optional(),
+  COS_SECRET_ID: z.string().trim().optional(),
+  COS_SECRET_KEY: z.string().trim().optional(),
+}).superRefine((data, ctx) => {
+  if (data.MEDIA_SOURCE === 'local' && !data.MEDIA_LIBRARY_ROOT) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'MEDIA_LIBRARY_ROOT is required when MEDIA_SOURCE is "local"',
+      path: ['MEDIA_LIBRARY_ROOT'],
+    });
+  }
+});
 
 export interface AppConfig {
   apiPort: number;
@@ -28,44 +51,46 @@ function resolveFromWorkspace(workspaceRoot: string, value: string | undefined, 
   return path.isAbsolute(value) ? value : path.resolve(workspaceRoot, value);
 }
 
-function requireEnv(env: NodeJS.ProcessEnv, key: string) {
-  const value = env[key]?.trim();
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${key}`);
-  }
-  return value;
-}
-
 export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()): AppConfig {
   const workspaceRoot = resolveWorkspaceRoot(cwd);
-  const mediaSource = env.MEDIA_SOURCE === 'cos' ? 'cos' : 'local';
 
-  // MEDIA_SOURCE=cos 时 MEDIA_LIBRARY_ROOT 为可选（仅导入/同步时需要）；local 模式下仍为必填
-  const libraryRootRaw = mediaSource === 'local'
-    ? requireEnv(env, 'MEDIA_LIBRARY_ROOT')
-    : (env.MEDIA_LIBRARY_ROOT?.trim() ?? '');
+  const parsed = envSchema.parse({
+    API_PORT: env.API_PORT,
+    MEDIA_SOURCE: env.MEDIA_SOURCE,
+    MEDIA_LIBRARY_ROOT: env.MEDIA_LIBRARY_ROOT,
+    DATABASE_PATH: env.DATABASE_PATH,
+    MEDIA_CACHE_DIR: env.MEDIA_CACHE_DIR,
+    ADMIN_TOKEN: env.ADMIN_TOKEN,
+    BASE_URL: env.BASE_URL,
+    COS_BUCKET: env.COS_BUCKET,
+    COS_REGION: env.COS_REGION,
+    COS_SECRET_ID: env.COS_SECRET_ID,
+    COS_SECRET_KEY: env.COS_SECRET_KEY,
+  });
+
+  const libraryRootRaw = parsed.MEDIA_LIBRARY_ROOT ?? '';
 
   return {
-    apiPort: Number.parseInt(env.API_PORT ?? '8787', 10),
+    apiPort: Number.parseInt(parsed.API_PORT, 10),
     workspaceRoot,
     databasePath: resolveFromWorkspace(
       workspaceRoot,
-      env.DATABASE_PATH,
+      parsed.DATABASE_PATH,
       path.join(workspaceRoot, 'var', 'video-game-music.sqlite'),
     ),
-    mediaSource,
+    mediaSource: parsed.MEDIA_SOURCE,
     libraryRoot: libraryRootRaw ? resolveFromWorkspace(workspaceRoot, libraryRootRaw, libraryRootRaw) : '',
     mediaCacheDir: resolveFromWorkspace(
       workspaceRoot,
-      env.MEDIA_CACHE_DIR,
+      parsed.MEDIA_CACHE_DIR,
       path.join(workspaceRoot, 'var', 'media-cache'),
     ),
-    adminToken: env.ADMIN_TOKEN?.trim() || undefined,
-    baseUrl: env.BASE_URL?.trim().replace(/\/$/, '') || undefined,
-    cosBucket: env.COS_BUCKET?.trim() || undefined,
-    cosRegion: env.COS_REGION?.trim() || undefined,
-    cosSecretId: env.COS_SECRET_ID?.trim() || undefined,
-    cosSecretKey: env.COS_SECRET_KEY?.trim() || undefined,
+    adminToken: parsed.ADMIN_TOKEN || undefined,
+    baseUrl: parsed.BASE_URL?.replace(/\/$/, '') || undefined,
+    cosBucket: parsed.COS_BUCKET || undefined,
+    cosRegion: parsed.COS_REGION || undefined,
+    cosSecretId: parsed.COS_SECRET_ID || undefined,
+    cosSecretKey: parsed.COS_SECRET_KEY || undefined,
   };
 }
 
