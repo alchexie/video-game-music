@@ -23,7 +23,7 @@ import {
   searchAlbums,
   searchCatalog,
   searchTracks,
-  syncMediaToCos,
+  uploadMediaToCos,
 } from '@vgm/core';
 import {
   addCollectionTracksSchema,
@@ -283,7 +283,7 @@ export async function createApp() {
 
   app.post('/api/admin/sync/cos', async () => {
     const context = await getDatabase(config);
-    return syncMediaToCos(context, config);
+    return uploadMediaToCos(context, config);
   });
 
   app.patch('/api/admin/albums/:id', async (request, reply) => {

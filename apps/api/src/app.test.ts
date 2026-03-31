@@ -177,7 +177,7 @@ vi.mock('@vgm/core', () => {
 
     // admin stubs (unused in public-API tests but required for import resolution)
     commitLibrary: vi.fn(),
-    syncMediaToCos: vi.fn(),
+    uploadMediaToCos: vi.fn(),
     patchAlbum: vi.fn(),
     patchTrack: vi.fn(),
     createCollection: vi.fn(),
