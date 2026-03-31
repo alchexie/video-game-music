@@ -23,7 +23,7 @@
 
 ## 资源导入
 
-- 执行入库：`pnpm import:commit`
+- 执行入库：`pnpm import:init`
 - 上传 COS：`pnpm sync:cos`
 
 开发环境下，播放器通过 API 直接读取 `MEDIA_LIBRARY_ROOT` 下的本地文件，不需要先上传资源。
