@@ -23,21 +23,6 @@ export function sanitizeSegment(value: string): string {
     .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-');
 }
 
-export function makeSourceKey(
-  albumArtist: string,
-  album: string,
-  discNumber: number | undefined,
-  trackNumber: number | undefined,
-  title: string,
-): string {
-  const normalizedArtist = normalizeDisplayValue(albumArtist).toLowerCase();
-  const normalizedAlbum = normalizeDisplayValue(album).toLowerCase();
-  const normalizedDisc = discNumber != null ? `${discNumber}` : '0';
-  const normalizedTrack = trackNumber != null ? `${trackNumber}` : '0';
-  const normalizedTitle = normalizeDisplayValue(title).toLowerCase();
-  return `${normalizedArtist}::${normalizedAlbum}::${normalizedDisc}::${normalizedTrack}::${normalizedTitle}`;
-}
-
 export function normalizeDisplayValue(value: string | undefined): string {
   return (value ?? '').trim().replace(/\s+/g, ' ');
 }

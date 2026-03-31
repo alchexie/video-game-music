@@ -23,7 +23,6 @@ import {
   compareTrackOrder,
   makeAlbumKey,
   makeSeriesKey,
-  makeSourceKey,
   normalizeDisplayValue,
   normalizeRelativePath,
   normalizeSortTitle,
@@ -48,7 +47,7 @@ import type { DatabaseContext } from './db.js';
 interface ScannedCandidate {
   absolutePath: string;
   relativePath: string;
-  sourceKey: string;
+  contentHash: string;
   sourceDirectory: string;
   fileSize: number;
   modifiedAt: string;
@@ -96,9 +95,10 @@ export async function scanLibrary(context: DatabaseContext, options: ImportOptio
 
   const candidates: ScannedCandidate[] = new Array(files.length);
   const existingAssets = all<Record<string, unknown>>(context, 'SELECT * FROM mediaAssets').map(mapMediaAsset);
-  const existingMap = new Map(existingAssets.map((asset) => [asset.sourceKey, asset]));
+  const existingByHash = new Map(existingAssets.map((asset) => [asset.contentHash, asset]));
   const existingTracks = all<Record<string, unknown>>(context, 'SELECT * FROM tracks').map(mapTrack);
   const existingTrackByAssetId = new Map(existingTracks.map((t) => [t.mediaAssetId, t]));
+  // Cache for skipping metadata re-parse when file hasn't changed on disk
   const existingByPath = new Map(
     existingAssets.flatMap((asset) => {
       const track = existingTrackByAssetId.get(asset.publicId);
@@ -123,7 +123,7 @@ export async function scanLibrary(context: DatabaseContext, options: ImportOptio
         candidates[i] = {
           absolutePath,
           relativePath,
-          sourceKey: cached.asset.sourceKey,
+          contentHash: cached.asset.contentHash,
           sourceDirectory: path.dirname(relativePath),
           fileSize: stat.size,
           modifiedAt: cached.asset.modifiedAt,
@@ -150,13 +150,12 @@ export async function scanLibrary(context: DatabaseContext, options: ImportOptio
 
   await Promise.all(Array.from({ length: Math.min(METADATA_CONCURRENCY, files.length) }, processNextFile));
 
-  const seenSourceKeys = new Set(candidates.map((candidate) => candidate.sourceKey));
+  const seenHashes = new Set(candidates.map((candidate) => candidate.contentHash));
   const changes: LibraryScanSummary['changes'] = candidates.map((candidate) => {
-    const existing = existingMap.get(candidate.sourceKey);
+    const existing = existingByHash.get(candidate.contentHash);
 
     if (!existing || existing.presenceStatus !== 'active') {
       return {
-        sourceKey: candidate.sourceKey,
         relativePath: candidate.relativePath,
         kind: 'new' as const,
       };
@@ -164,23 +163,20 @@ export async function scanLibrary(context: DatabaseContext, options: ImportOptio
 
     if (existing.fileSize !== candidate.fileSize || existing.modifiedAt !== candidate.modifiedAt) {
       return {
-        sourceKey: candidate.sourceKey,
         relativePath: candidate.relativePath,
         kind: 'updated' as const,
       };
     }
 
     return {
-      sourceKey: candidate.sourceKey,
       relativePath: candidate.relativePath,
       kind: 'unchanged' as const,
     };
   });
 
   for (const asset of existingAssets) {
-    if (asset.presenceStatus === 'active' && !seenSourceKeys.has(asset.sourceKey)) {
+    if (asset.presenceStatus === 'active' && !seenHashes.has(asset.contentHash)) {
       changes.push({
-        sourceKey: asset.sourceKey,
         relativePath: asset.relativePath,
         kind: 'missing',
       });
@@ -227,38 +223,52 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
   });
 
   // Reuse data already loaded during scan instead of re-querying
-  const assetMap = new Map(scan.existingAssets.map((asset) => [asset.sourceKey, asset]));
+  const assetMap = new Map(scan.existingAssets.map((asset) => [asset.contentHash, asset]));
   const trackMap = new Map(scan.existingTracks.map((track) => [track.mediaAssetId, track]));
   const now = new Date().toISOString();
 
+  // Deduplicate candidates by contentHash — keep the first occurrence per hash
+  const uniqueCandidates: ScannedCandidate[] = [];
+  const seenCandidateHashes = new Set<string>();
+  for (const candidate of scan.candidates) {
+    if (!seenCandidateHashes.has(candidate.contentHash)) {
+      seenCandidateHashes.add(candidate.contentHash);
+      uniqueCandidates.push(candidate);
+    }
+  }
+  if (uniqueCandidates.length < scan.candidates.length) {
+    reportProgress(config, {
+      phase: 'write',
+      message: `去重：${scan.candidates.length} → ${uniqueCandidates.length}（跳过 ${scan.candidates.length - uniqueCandidates.length} 个重复文件）`,
+      elapsedMs: Date.now() - startedAt,
+    });
+  }
+
   reportProgress(config, {
     phase: 'write',
-    message: `开始写入数据库，共 ${scan.candidates.length} 个文件`,
+    message: `开始写入数据库，共 ${uniqueCandidates.length} 个文件`,
     processed: 0,
-    total: scan.candidates.length,
+    total: uniqueCandidates.length,
     elapsedMs: Date.now() - startedAt,
   });
 
-  const activeSourceKeys = new Set(scan.candidates.map((candidate) => candidate.sourceKey));
-  const missingAssets = scan.existingAssets.filter((asset) => !activeSourceKeys.has(asset.sourceKey) && asset.presenceStatus === 'active');
+  const activeHashes = new Set(uniqueCandidates.map((candidate) => candidate.contentHash));
+  const missingAssets = scan.existingAssets.filter((asset) => !activeHashes.has(asset.contentHash) && asset.presenceStatus === 'active');
 
   // Prepare statements once, reuse in loop
   const insertAssetStmt = prepare(context, `
     INSERT INTO mediaAssets (
-      publicId, sourceKey, relativePath, extension, mimeType, fileSize, modifiedAt, contentHash,
+      publicId, relativePath, extension, mimeType, fileSize, modifiedAt, contentHash,
       syncStatus, presenceStatus, createdAt, updatedAt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(sourceKey) DO UPDATE SET
-      publicId = excluded.publicId,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(contentHash) DO UPDATE SET
       relativePath = excluded.relativePath,
       extension = excluded.extension,
       mimeType = excluded.mimeType,
       fileSize = excluded.fileSize,
       modifiedAt = excluded.modifiedAt,
-      contentHash = excluded.contentHash,
       syncStatus = excluded.syncStatus,
       presenceStatus = excluded.presenceStatus,
-      createdAt = excluded.createdAt,
       updatedAt = excluded.updatedAt
   `);
 
@@ -268,7 +278,6 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
       displayTitle, displayArtist, hidden, createdAt, updatedAt
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(mediaAssetId) DO UPDATE SET
-      publicId = excluded.publicId,
       title = excluded.title,
       artist = excluded.artist,
       durationSeconds = excluded.durationSeconds,
@@ -279,31 +288,29 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
       displayTitle = excluded.displayTitle,
       displayArtist = excluded.displayArtist,
       hidden = excluded.hidden,
-      createdAt = excluded.createdAt,
       updatedAt = excluded.updatedAt
   `);
 
   const markMissingStmt = prepare(context, `
     UPDATE mediaAssets
     SET presenceStatus = 'missing', syncStatus = 'pending', updatedAt = ?
-    WHERE sourceKey = ?
+    WHERE contentHash = ?
   `);
 
   transaction(context, () => {
-    for (const [index, candidate] of scan.candidates.entries()) {
-      const existingAsset = assetMap.get(candidate.sourceKey);
+    for (const [index, candidate] of uniqueCandidates.entries()) {
+      const existingAsset = assetMap.get(candidate.contentHash);
       const assetPublicId = existingAsset?.publicId ?? uuidv7();
       const unchanged = existingAsset?.fileSize === candidate.fileSize && existingAsset.modifiedAt === candidate.modifiedAt;
 
       insertAssetStmt.run(
         assetPublicId,
-        candidate.sourceKey,
         candidate.relativePath,
         candidate.extension,
         candidate.mimeType,
         candidate.fileSize,
         candidate.modifiedAt,
-        unchanged ? (existingAsset?.contentHash ?? null) : null,
+        candidate.contentHash,
         unchanged ? (existingAsset?.syncStatus ?? 'pending') : 'pending',
         'active',
         existingAsset?.createdAt ?? now,
@@ -328,19 +335,19 @@ export async function commitLibrary(context: DatabaseContext, config: AppConfig)
         now,
       );
 
-      if ((index + 1) % 100 === 0 || index === scan.candidates.length - 1) {
+      if ((index + 1) % 100 === 0 || index === uniqueCandidates.length - 1) {
         reportProgress(config, {
           phase: 'write',
-          message: `已写入 ${index + 1}/${scan.candidates.length} 个文件`,
+          message: `已写入 ${index + 1}/${uniqueCandidates.length} 个文件`,
           processed: index + 1,
-          total: scan.candidates.length,
+          total: uniqueCandidates.length,
           elapsedMs: Date.now() - startedAt,
         });
       }
     }
 
     for (const asset of missingAssets) {
-      markMissingStmt.run(now, asset.sourceKey);
+      markMissingStmt.run(now, asset.contentHash);
     }
   });
 
@@ -382,7 +389,7 @@ async function rebuildAlbums(context: DatabaseContext, options: Pick<AppConfig, 
     }
   }
 
-  const existingAlbumMap = new Map(existingAlbums.map((album) => [album.albumKey, album]));
+  const existingAlbumMap = new Map(existingAlbums.map((album) => [makeAlbumKey(album.title, album.albumArtist), album]));
   const albumDocs: AlbumRecord[] = [];
   const albumFirstTrackPath = new Map<string, string>();
   const albumTrackDocs: Array<{
@@ -420,7 +427,6 @@ async function rebuildAlbums(context: DatabaseContext, options: Pick<AppConfig, 
 
     albumDocs.push({
       publicId: albumPublicId,
-      albumKey,
       title: firstTrack.sourceMeta.album,
       albumArtist: firstTrack.sourceMeta.albumArtist,
       year: firstTrack.sourceMeta.year,
@@ -536,9 +542,9 @@ async function rebuildAlbums(context: DatabaseContext, options: Pick<AppConfig, 
   // Prepare statements once for all inserts
   const insertAlbumStmt = prepare(context, `
     INSERT INTO albums (
-      publicId, albumKey, title, albumArtist, year, sourceDirectory, sourceMeta,
+      publicId, title, albumArtist, year, sourceDirectory, sourceMeta,
       displayTitle, displayArtist, hidden, isSystemGenerated, sortTitle, createdAt, updatedAt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const insertAlbumTrackStmt = prepare(context, `
@@ -565,7 +571,6 @@ async function rebuildAlbums(context: DatabaseContext, options: Pick<AppConfig, 
     for (const album of albumDocs) {
       insertAlbumStmt.run(
         album.publicId,
-        album.albumKey,
         album.title,
         album.albumArtist,
         album.year ?? null,
@@ -669,11 +674,12 @@ async function buildCandidate(libraryRoot: string, absolutePath: string): Promis
   const discNumber = parseTagNumber(common.disk.no) ?? parseDiscNumberFromDirectory(relativePath) ?? 1;
   const trackNumber = parseTagNumber(common.track.no) ?? 0;
   const discTitle = parseDiscTitle(relativePath, discNumber);
+  const contentHash = await computeAudioHash(absolutePath);
 
   return {
     absolutePath,
     relativePath,
-    sourceKey: makeSourceKey(albumArtist, album, discNumber, trackNumber, title),
+    contentHash,
     sourceDirectory: path.dirname(relativePath),
     fileSize: stat.size,
     modifiedAt: stat.mtime.toISOString(),
@@ -760,9 +766,54 @@ async function ensureCacheDirs(cacheDir: string) {
   await fs.mkdir(path.join(cacheDir, 'covers'), { recursive: true });
 }
 
-export async function computeFileHash(absolutePath: string) {
+/**
+ * Compute a SHA-1 hash of the audio data only (skipping metadata/tags).
+ * Uses music-metadata to find where the audio stream starts,
+ * then hashes from that offset to the end of the audio data.
+ * Falls back to hashing the entire file if offset detection fails.
+ */
+export async function computeAudioHash(absolutePath: string): Promise<string> {
+  let audioOffset = 0;
+  let audioEnd: number | undefined;
+  try {
+    const metadata = await parseFile(absolutePath, { duration: false, skipCovers: true });
+    const native = metadata.format;
+    // Use the codec header offset if available, otherwise 0
+    if (native.tagTypes) {
+      // For formats with leading tags (ID3v2 in MP3), the audioOffset
+      // marks where audio frames actually start.
+      // music-metadata exposes this via an internal path, but a reliable
+      // approach is to hash from after any ID3v2 header.
+      const stat = await fs.stat(absolutePath);
+      const totalSize = stat.size;
+
+      // Detect ID3v2 header size for MP3 files
+      const ext = path.extname(absolutePath).toLowerCase();
+      if (ext === '.mp3') {
+        const fd = await fs.open(absolutePath, 'r');
+        try {
+          const header = Buffer.alloc(10);
+          await fd.read(header, 0, 10, 0);
+          // ID3v2 header: "ID3" followed by version, flags, and 4 bytes syncsafe size
+          if (header[0] === 0x49 && header[1] === 0x44 && header[2] === 0x33) {
+            const size = (header[6]! << 21) | (header[7]! << 14) | (header[8]! << 7) | header[9]!;
+            audioOffset = 10 + size;
+          }
+        } finally {
+          await fd.close();
+        }
+      }
+      audioEnd = totalSize;
+    }
+  } catch {
+    // Fall back to full file hash
+  }
+
   const hash = createHash('sha1');
-  const stream = createReadStream(absolutePath);
+  const stream = createReadStream(absolutePath, {
+    start: audioOffset,
+    ...(audioEnd !== undefined ? { end: audioEnd - 1 } : {}),
+  });
 
   await new Promise<void>((resolve, reject) => {
     stream.on('data', (chunk) => hash.update(chunk));

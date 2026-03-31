@@ -34,13 +34,12 @@ export interface TrackRecord {
 
 export interface MediaAssetRecord {
   publicId: string;
-  sourceKey: string;
   relativePath: string;
   extension: string;
   mimeType: string;
   fileSize: number;
   modifiedAt: string;
-  contentHash?: string;
+  contentHash: string;
   syncStatus: SyncStatus;
   presenceStatus: PresenceStatus;
   createdAt: string;
@@ -49,7 +48,6 @@ export interface MediaAssetRecord {
 
 export interface AlbumRecord {
   publicId: string;
-  albumKey: string;
   title: string;
   albumArtist: string;
   year?: number;
@@ -201,7 +199,6 @@ export interface TracksSearchResult {
 }
 
 export interface LibraryScanChange {
-  sourceKey: string;
   relativePath: string;
   kind: 'new' | 'updated' | 'missing' | 'unchanged';
 }

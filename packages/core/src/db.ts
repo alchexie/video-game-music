@@ -61,13 +61,12 @@ async function connectDatabase(config: AppConfig): Promise<DatabaseContext> {
 
     CREATE TABLE IF NOT EXISTS mediaAssets (
       publicId TEXT PRIMARY KEY,
-      sourceKey TEXT NOT NULL UNIQUE,
       relativePath TEXT NOT NULL,
       extension TEXT NOT NULL,
       mimeType TEXT NOT NULL,
       fileSize INTEGER NOT NULL,
       modifiedAt TEXT NOT NULL,
-      contentHash TEXT,
+      contentHash TEXT NOT NULL UNIQUE,
       syncStatus TEXT NOT NULL,
       presenceStatus TEXT NOT NULL,
       createdAt TEXT NOT NULL,
@@ -76,7 +75,6 @@ async function connectDatabase(config: AppConfig): Promise<DatabaseContext> {
 
     CREATE TABLE IF NOT EXISTS albums (
       publicId TEXT PRIMARY KEY,
-      albumKey TEXT NOT NULL UNIQUE,
       title TEXT NOT NULL,
       albumArtist TEXT NOT NULL,
       year INTEGER,
@@ -148,8 +146,15 @@ async function connectDatabase(config: AppConfig): Promise<DatabaseContext> {
   const assetCols = new Set(
     (db.prepare(`PRAGMA table_info(mediaAssets)`).all() as Array<{ name: string }>).map((c) => c.name),
   );
-  for (const col of ['cosKey']) {
+  for (const col of ['cosKey', 'sourceKey']) {
     if (assetCols.has(col)) db.exec(`ALTER TABLE mediaAssets DROP COLUMN ${col}`);
+  }
+
+  const albumCols = new Set(
+    (db.prepare(`PRAGMA table_info(albums)`).all() as Array<{ name: string }>).map((c) => c.name),
+  );
+  for (const col of ['albumKey']) {
+    if (albumCols.has(col)) db.exec(`ALTER TABLE albums DROP COLUMN ${col}`);
   }
 
   return { db };
@@ -244,13 +249,12 @@ export function mapTrack(row: Row): TrackRecord {
 export function mapMediaAsset(row: Row): MediaAssetRecord {
   return {
     publicId: String(row.publicId),
-    sourceKey: String(row.sourceKey),
     relativePath: String(row.relativePath),
     extension: String(row.extension),
     mimeType: String(row.mimeType),
     fileSize: Number(row.fileSize ?? 0),
     modifiedAt: String(row.modifiedAt),
-    contentHash: typeof row.contentHash === 'string' ? row.contentHash : undefined,
+    contentHash: String(row.contentHash),
     syncStatus: row.syncStatus as MediaAssetRecord['syncStatus'],
     presenceStatus: row.presenceStatus as MediaAssetRecord['presenceStatus'],
     createdAt: String(row.createdAt),
@@ -261,7 +265,6 @@ export function mapMediaAsset(row: Row): MediaAssetRecord {
 export function mapAlbum(row: Row): AlbumRecord {
   return {
     publicId: String(row.publicId),
-    albumKey: String(row.albumKey),
     title: String(row.title),
     albumArtist: String(row.albumArtist),
     year: toNullableNumber(row.year),
