@@ -32,7 +32,7 @@ watch(() => route.params.id, () => { void loadCollection() })
 onMounted(() => { void loadCollection() })
 
 const coverUrl = computed(() => (
-  collection.value?.coverAssetId ? `/api/assets/${collection.value.coverAssetId}/cover` : ''
+  `/api/assets/${collection.value?.publicId}/cover`
 ))
 </script>
 
@@ -50,8 +50,7 @@ const coverUrl = computed(() => (
       <template v-if="collection">
         <div class="page-hero">
           <div class="page-hero-cover">
-            <img v-if="collection.coverAssetId" :src="coverUrl" :alt="collection.title" />
-            <div v-else class="page-hero-cover-fallback">🎵</div>
+            <img :src="coverUrl" :alt="collection.title" />
           </div>
           <div class="page-hero-meta">
             <span class="page-hero-type">主题歌单</span>
@@ -71,7 +70,7 @@ const coverUrl = computed(() => (
           <TrackTable
             :tracks="collection.tracks"
             :queue-label="collection.title"
-            :cover-asset-id="collection.coverAssetId"
+            :cover-id="collection.publicId"
           />
         </section>
       </template>

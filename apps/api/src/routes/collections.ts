@@ -39,7 +39,6 @@ export async function collectionRoutes(app: FastifyInstance, { config }: RouteCo
       publicId: uuidv7(),
       title: input.title,
       description: input.description,
-      coverAssetId: input.coverAssetId,
       status: input.status,
     });
   });

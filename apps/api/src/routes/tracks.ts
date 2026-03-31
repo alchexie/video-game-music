@@ -49,7 +49,7 @@ export async function trackRoutes(app: FastifyInstance, { config }: RouteContext
       items: result.items.map((track) => ({
         ...track,
         streamUrl: `${baseUrl}/api/tracks/${track.publicId}/stream`,
-        coverUrl: track.coverAssetId ? `${baseUrl}/api/assets/${track.coverAssetId}/cover` : undefined,
+        coverUrl: track.albumId ? `${baseUrl}/api/assets/${track.albumId}/cover` : undefined,
       })),
     };
   });

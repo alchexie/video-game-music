@@ -54,7 +54,6 @@ export interface AlbumRecord {
   albumArtist: string;
   year?: number;
   sourceDirectory?: string;
-  coverAssetId?: string;
   sourceMeta: Pick<SourceMeta, 'album' | 'albumArtist' | 'year'>;
   displayTitle?: string;
   displayArtist?: string;
@@ -79,7 +78,6 @@ export interface CollectionRecord {
   publicId: string;
   title: string;
   description?: string;
-  coverAssetId?: string;
   status: CollectionStatus;
   createdAt: string;
   updatedAt: string;
@@ -115,7 +113,6 @@ export interface AlbumListItem {
   year?: number;
   trackCount: number;
   discCount: number;
-  coverAssetId?: string;
 }
 
 export interface TrackListItem {
@@ -139,7 +136,6 @@ export interface CollectionDetail {
   title: string;
   description?: string;
   status: CollectionStatus;
-  coverAssetId?: string;
   tracks: Array<TrackListItem & { albumId?: string; albumTitle?: string }>;
 }
 
@@ -169,7 +165,6 @@ export interface AlbumSearchItem {
   year?: number;
   trackCount: number;
   discCount: number;
-  coverAssetId?: string;
   seriesId?: string;
   seriesName?: string;
   coverUrl?: string;
@@ -196,7 +191,6 @@ export interface TrackSearchItem {
   albumArtist?: string;
   year?: number;
   genre?: string;
-  coverAssetId?: string;
 }
 
 export interface TracksSearchResult {
@@ -259,7 +253,6 @@ export interface CollectionSummary {
   title: string;
   description?: string;
   status: CollectionStatus;
-  coverAssetId?: string;
   trackCount: number;
 }
 

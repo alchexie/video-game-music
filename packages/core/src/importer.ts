@@ -448,7 +448,6 @@ async function rebuildAlbums(context: DatabaseContext, options: Pick<AppConfig, 
       albumArtist: firstTrack.sourceMeta.albumArtist,
       year: firstTrack.sourceMeta.year,
       sourceDirectory: commonDirectory(group.map((track) => trackAssetMap.get(track.mediaAssetId)?.relativePath ?? '')),
-      coverAssetId: undefined, // will be resolved below
       sourceMeta: {
         album: firstTrack.sourceMeta.album,
         albumArtist: firstTrack.sourceMeta.albumArtist,
@@ -504,10 +503,6 @@ async function rebuildAlbums(context: DatabaseContext, options: Pick<AppConfig, 
         }
       }
     }
-
-    if (covered) {
-      album.coverAssetId = album.publicId;
-    }
   }
 
   reportProgress(options, {
@@ -561,9 +556,9 @@ async function rebuildAlbums(context: DatabaseContext, options: Pick<AppConfig, 
     for (const album of albumDocs) {
       run(context, `
         INSERT INTO albums (
-          publicId, albumKey, title, albumArtist, year, sourceDirectory, coverAssetId, sourceMeta,
+          publicId, albumKey, title, albumArtist, year, sourceDirectory, sourceMeta,
           displayTitle, displayArtist, hidden, isSystemGenerated, sortTitle, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         album.publicId,
         album.albumKey,
@@ -571,7 +566,6 @@ async function rebuildAlbums(context: DatabaseContext, options: Pick<AppConfig, 
         album.albumArtist,
         album.year ?? null,
         album.sourceDirectory ?? null,
-        album.coverAssetId ?? null,
         encodeJson(album.sourceMeta),
         album.displayTitle ?? null,
         album.displayArtist ?? null,

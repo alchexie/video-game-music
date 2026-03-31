@@ -62,7 +62,6 @@ export async function listAlbums(context: DatabaseContext): Promise<AlbumListIte
       title: albumLabel(album),
       albumArtist: albumArtistLabel(album),
       year: album.year,
-      coverAssetId: album.coverAssetId,
       trackCount: Number(row.trackCount ?? 0),
       discCount: Number(row.discCount ?? 0),
     };
@@ -113,7 +112,6 @@ export async function getAlbumDetail(context: DatabaseContext, albumId: string):
     title: albumLabel(album),
     albumArtist: albumArtistLabel(album),
     year: album.year,
-    coverAssetId: album.coverAssetId,
     trackCount: tracks.length,
     discCount: new Set(tracks.map((item) => item.discNumber)).size,
     sourceDirectory: album.sourceDirectory,
@@ -146,7 +144,6 @@ export async function listCollections(context: DatabaseContext): Promise<Array<{
   title: string;
   description?: string;
   status: 'draft' | 'published';
-  coverAssetId?: string;
   trackCount: number;
 }>> {
   const rows = all<Record<string, unknown>>(context, `
@@ -166,7 +163,6 @@ export async function listCollections(context: DatabaseContext): Promise<Array<{
       title: collection.title,
       description: collection.description,
       status: collection.status,
-      coverAssetId: collection.coverAssetId,
       trackCount: Number(row.trackCount ?? 0),
     };
   });
@@ -207,7 +203,6 @@ export async function getCollectionDetail(context: DatabaseContext, collectionId
     title: collection.title,
     description: collection.description,
     status: collection.status,
-    coverAssetId: collection.coverAssetId,
     tracks: rows.map((row) => {
       const track = mapTrack(row);
       return {
@@ -297,7 +292,6 @@ export async function searchCatalog(context: DatabaseContext, query: string): Pr
         title: albumLabel(album),
         albumArtist: albumArtistLabel(album),
         year: album.year,
-        coverAssetId: album.coverAssetId,
         trackCount: 0,
         discCount: 0,
       };
@@ -418,7 +412,6 @@ export async function searchAlbums(
       year: album.year,
       trackCount: Number(row.trackCount ?? 0),
       discCount: Number(row.discCount ?? 0),
-      coverAssetId: album.coverAssetId,
       seriesId: typeof row.seriesPublicId === 'string' ? row.seriesPublicId : undefined,
       seriesName: typeof row.seriesName === 'string' ? row.seriesName : undefined,
     };
@@ -531,8 +524,7 @@ export async function searchTracks(
       at.discTitle,
       a.publicId AS albumPublicId,
       COALESCE(a.displayTitle, a.title) AS albumTitle,
-      COALESCE(a.displayArtist, a.albumArtist) AS albumArtist,
-      a.coverAssetId AS albumCoverAssetId
+      COALESCE(a.displayArtist, a.albumArtist) AS albumArtist
     FROM tracks t
     ${joinClause}
     ${whereClause}
@@ -557,7 +549,6 @@ export async function searchTracks(
       albumArtist: typeof row.albumArtist === 'string' ? row.albumArtist : undefined,
       year: track.year,
       genre: track.genre,
-      coverAssetId: typeof row.albumCoverAssetId === 'string' ? row.albumCoverAssetId : undefined,
     };
   });
 
@@ -602,18 +593,16 @@ export async function createCollection(context: DatabaseContext, collection: {
   publicId: string;
   title: string;
   description?: string;
-  coverAssetId?: string;
   status: 'draft' | 'published';
 }) {
   const now = new Date().toISOString();
   run(context, `
-    INSERT INTO collections (publicId, title, description, coverAssetId, status, createdAt, updatedAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO collections (publicId, title, description, status, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?)
   `, [
     collection.publicId,
     collection.title,
     collection.description ?? null,
-    collection.coverAssetId ?? null,
     collection.status,
     now,
     now,
@@ -712,7 +701,6 @@ export async function getSeriesDetail(context: DatabaseContext, seriesId: string
       title: albumLabel(album),
       albumArtist: albumArtistLabel(album),
       year: album.year,
-      coverAssetId: album.coverAssetId,
       trackCount: Number(row.trackCount ?? 0),
       discCount: Number(row.discCount ?? 0),
     };

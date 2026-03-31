@@ -37,7 +37,7 @@ export async function albumRoutes(app: FastifyInstance, { config }: RouteContext
       ...result,
       items: result.items.map((album) => ({
         ...album,
-        coverUrl: album.coverAssetId ? `${baseUrl}/api/assets/${album.coverAssetId}/cover` : undefined,
+        coverUrl: `${baseUrl}/api/assets/${album.publicId}/cover`,
       })),
     };
   });

@@ -26,7 +26,7 @@ async function loadAlbum() {
           album.value.tracks,
           0,
           album.value.title,
-          album.value.coverAssetId,
+          album.value.publicId,
         )
       } catch {
         // 浏览器自动播放策略可能阻止刷新后的自动播放，忽略该错误
@@ -46,7 +46,7 @@ watch(() => route.params.id, () => { void loadAlbum() })
 onMounted(() => { void loadAlbum() })
 
 const coverUrl = computed(() => (
-  album.value?.coverAssetId ? `/api/assets/${album.value.coverAssetId}/cover` : ''
+  `/api/assets/${album.value?.publicId}/cover`
 ))
 </script>
 
@@ -64,8 +64,7 @@ const coverUrl = computed(() => (
       <template v-if="album">
         <div class="page-hero">
           <div class="page-hero-cover">
-            <img v-if="album.coverAssetId" :src="coverUrl" :alt="album.title" />
-            <div v-else class="page-hero-cover-fallback">🎮</div>
+            <img :src="coverUrl" :alt="album.title" />
           </div>
           <div class="page-hero-meta">
             <span class="page-hero-type">专辑</span>
@@ -79,7 +78,7 @@ const coverUrl = computed(() => (
           <TrackTable
             :tracks="album.tracks"
             :queue-label="album.title"
-            :cover-asset-id="album.coverAssetId"
+            :cover-id="album.publicId"
             group-by-disc
           />
         </section>

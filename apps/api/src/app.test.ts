@@ -20,7 +20,6 @@ vi.mock('@vgm/core', () => {
     year: 2000,
     trackCount: 4,
     discCount: 1,
-    coverAssetId: 'asset-cover-1',
   };
 
   const mockTrackListItem = {
@@ -70,7 +69,6 @@ vi.mock('@vgm/core', () => {
     title: 'My Favorites',
     description: 'Best tracks',
     status: 'published' as const,
-    coverAssetId: undefined,
     trackCount: 1,
   };
 
@@ -79,7 +77,6 @@ vi.mock('@vgm/core', () => {
     title: 'My Favorites',
     description: 'Best tracks',
     status: 'published' as const,
-    coverAssetId: undefined,
     tracks: [
       {
         ...mockTrackListItem,
@@ -125,7 +122,6 @@ vi.mock('@vgm/core', () => {
         albumArtist: 'Go Ichinose',
         year: 2000,
         genre: 'Game',
-        coverAssetId: 'asset-cover-1',
       },
     ],
     total: 1,

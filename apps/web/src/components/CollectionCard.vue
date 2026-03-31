@@ -11,12 +11,10 @@ defineProps<{
     <article class="media-card">
       <div class="media-card-cover">
         <img
-          v-if="collection.coverAssetId"
-          :src="`/api/assets/${collection.coverAssetId}/cover`"
+          :src="`/api/assets/${collection.publicId}/cover`"
           :alt="collection.title"
           loading="lazy"
         />
-        <div v-else class="cover-fallback">🎵</div>
         <div class="media-card-play-overlay">
           <div class="media-card-play-btn">
             <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">

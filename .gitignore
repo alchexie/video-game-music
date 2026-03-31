@@ -7,8 +7,8 @@ coverage
 .vite
 .turbo
 *.tsbuildinfo
-var/
-*.sqlite
+var/media-cache/
+# *.sqlite
 *.sqlite-shm
 *.sqlite-wal
 apps/web/node_modules

@@ -79,7 +79,6 @@
       "albumArtist": "Go Ichinose / Hitomi Sato",
       "year": 2007,
       "genre": "Game",
-      "coverAssetId": "01960a11-...",
       "streamUrl": "http://localhost:5005/api/tracks/01960b2a-.../stream",
       "coverUrl": "http://localhost:5005/api/assets/01960a11-.../cover"
     }
@@ -107,7 +106,6 @@
 | `albumArtist`     | `string \| null`   | 专辑艺术家                                         |
 | `year`            | `number \| null`   | 发行年份                                           |
 | `genre`           | `string \| null`   | 流派                                               |
-| `coverAssetId`    | `string \| null`   | 封面资产 ID                                        |
 | `streamUrl`       | `string`           | **音频流 URL**，可直接用于 `<audio src>` 或播放器 |
 | `coverUrl`        | `string \| null`   | **封面图片 URL**，可直接用于 `<img src>`           |
 
@@ -256,7 +254,6 @@ GET /api/tracks/search?albumId=01960a11-...&discNumber=1&trackNumber=3
       "year": 2007,
       "trackCount": 158,
       "discCount": 4,
-      "coverAssetId": "01960a11-...",
       "seriesId": "01960a00-...",
       "seriesName": "Pokémon",
       "coverUrl": "http://localhost:5005/api/assets/01960a11-.../cover"
@@ -278,7 +275,6 @@ GET /api/tracks/search?albumId=01960a11-...&discNumber=1&trackNumber=3
 | `year`         | `number \| null` | 发行年份                                     |
 | `trackCount`   | `number`         | 曲目数量                                     |
 | `discCount`    | `number`         | 碟数                                         |
-| `coverAssetId` | `string \| null` | 封面资产 ID                                  |
 | `seriesId`     | `string \| null` | 所属系列 ID                                  |
 | `seriesName`   | `string \| null` | 所属系列名称                                 |
 | `coverUrl`     | `string \| null` | **封面图片 URL**，可直接用于 `<img src>`     |
@@ -312,8 +308,7 @@ GET /api/albums/search?seriesId=01960a00-...&year=2006
     "albumArtist": "Go Ichinose / Hitomi Sato",
     "year": 2007,
     "trackCount": 158,
-    "discCount": 4,
-    "coverAssetId": "01960a11-..."
+    "discCount": 4
   }
 ]
 ```
@@ -340,7 +335,6 @@ GET /api/albums/search?seriesId=01960a00-...&year=2006
   "year": 2007,
   "trackCount": 158,
   "discCount": 4,
-  "coverAssetId": "01960a11-...",
   "sourceDirectory": "Pokemon/Diamond-Pearl",
   "tracks": [
     {
@@ -433,8 +427,7 @@ GET /api/albums/search?seriesId=01960a00-...&year=2006
       "albumArtist": "Junichi Masuda",
       "year": 1996,
       "trackCount": 37,
-      "discCount": 1,
-      "coverAssetId": null
+"discCount": 1
     }
   ]
 }
@@ -465,7 +458,6 @@ GET /api/albums/search?seriesId=01960a00-...&year=2006
     "title": "我的最爱",
     "description": "精选曲目",
     "status": "published",
-    "coverAssetId": null,
     "trackCount": 24
   }
 ]
@@ -491,7 +483,6 @@ GET /api/albums/search?seriesId=01960a00-...&year=2006
   "title": "我的最爱",
   "description": "精选曲目",
   "status": "published",
-  "coverAssetId": null,
   "tracks": [
     {
       "publicId": "01960b2a-...",
@@ -566,8 +557,7 @@ GET /api/albums/search?seriesId=01960a00-...&year=2006
       "albumArtist": "Go Ichinose / Hitomi Sato",
       "year": 2007,
       "trackCount": 0,
-      "discCount": 0,
-      "coverAssetId": "01960a11-..."
+      "discCount": 0
     }
   ],
   "tracks": [
@@ -652,12 +642,11 @@ X-Admin-Token: <your-admin-token>
 {
   "displayTitle": "自定义标题",
   "displayArtist": "自定义艺术家",
-  "coverAssetId": "01960a11-...",
   "hidden": false
 }
 ```
 
-所有字段均为可选。`coverAssetId` 可传 `null` 以移除封面关联。
+所有字段均为可选。
 
 #### 错误响应
 
@@ -709,7 +698,6 @@ X-Admin-Token: <your-admin-token>
 {
   "title": "我的播放列表",
   "description": "可选描述",
-  "coverAssetId": "01960a11-...",
   "status": "draft"
 }
 ```
@@ -718,7 +706,6 @@ X-Admin-Token: <your-admin-token>
 | -------------- | -------- | ---- | ----------------------------- |
 | `title`        | `string` | 是   | 合集名称，最长 256 字符       |
 | `description`  | `string` | 否   | 合集描述，最长 1000 字符      |
-| `coverAssetId` | `string` | 否   | 封面资产 ID                   |
 | `status`       | `string` | 否   | `"draft"` 或 `"published"`，默认 `"draft"` |
 
 ---
@@ -768,7 +755,6 @@ X-Admin-Token: <your-admin-token>
 | `year`         | `number?` | 发行年份                      |
 | `trackCount`   | `number`  | 曲目数量                      |
 | `discCount`    | `number`  | 碟数                          |
-| `coverAssetId` | `string?` | 封面资产 ID                   |
 | `seriesId`     | `string?` | 所属系列 ID                   |
 | `seriesName`   | `string?` | 所属系列名称                  |
 | `coverUrl`     | `string?` | 封面图片 URL（仅搜索接口返回）|
@@ -790,7 +776,6 @@ X-Admin-Token: <your-admin-token>
 | `albumArtist`     | `string?`        | 专辑艺术家                   |
 | `year`            | `number?`        | 发行年份                     |
 | `genre`           | `string?`        | 流派                         |
-| `coverAssetId`    | `string?`        | 封面资产 ID                  |
 | `streamUrl`       | `string`         | 音频流 URL（仅搜索接口返回） |
 | `coverUrl`        | `string?`        | 封面图片 URL（仅搜索接口返回）|
 

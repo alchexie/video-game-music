@@ -14,7 +14,7 @@ export const usePlayerStore = defineStore('player', () => {
   const queue = ref<TrackListItem[]>([])
   const currentIndex = ref(-1)
   const queueLabel = ref(DEFAULT_QUEUE_LABEL)
-  const coverAssetId = ref<string | undefined>()
+  const coverId = ref<string | undefined>()
   const playMode = ref<PlayMode>('sequential')
 
   const currentTrack = computed(() => (
@@ -23,7 +23,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   const activeCoverUrl = computed(() =>
     engine.embeddedCoverUrl.value
-    ?? (coverAssetId.value ? `/api/assets/${coverAssetId.value}/cover` : undefined),
+    ?? (coverId.value ? `/api/assets/${coverId.value}/cover` : undefined),
   )
 
   function bindAudio(element: HTMLAudioElement) {
@@ -45,7 +45,7 @@ export const usePlayerStore = defineStore('player', () => {
   ) {
     queue.value = inputQueue
     queueLabel.value = label
-    coverAssetId.value = cover
+    coverId.value = cover
     currentIndex.value = index
     engine.currentTime.value = 0
     engine.duration.value = 0
@@ -112,7 +112,7 @@ export const usePlayerStore = defineStore('player', () => {
   return {
     queue,
     queueLabel,
-    coverAssetId,
+    coverId,
     currentIndex,
     currentTrack,
     activeCoverUrl,

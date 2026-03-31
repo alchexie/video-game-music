@@ -21,12 +21,10 @@ function onPlayClick(e: MouseEvent) {
     <article class="media-card">
       <div class="media-card-cover">
         <img
-          v-if="album.coverAssetId"
-          :src="`/api/assets/${album.coverAssetId}/cover`"
+          :src="`/api/assets/${album.publicId}/cover`"
           :alt="album.title"
           loading="lazy"
         />
-        <div v-else class="cover-fallback">🎮</div>
         <div class="media-card-play-overlay">
           <div class="media-card-play-btn" @click="onPlayClick">
             <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">

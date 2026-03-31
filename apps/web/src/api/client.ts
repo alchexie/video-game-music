@@ -85,7 +85,6 @@ export async function syncCos() {
 export async function createCollection(payload: {
   title: string
   description?: string
-  coverAssetId?: string
   status: 'draft' | 'published'
 }) {
   const { data } = await api.post('/admin/collections', payload)
