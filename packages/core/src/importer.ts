@@ -22,12 +22,15 @@ import {
   SUPPORTED_AUDIO_EXTENSIONS,
   compareTrackOrder,
   normalizeDisplayValue,
-  normalizeRelativePath,
   normalizeSortTitle,
   parseAlbumSortOrderInSeries,
   parseSeriesFromPath,
   parseTagNumber,
-} from '@vgm/shared/normalization';
+} from '@vgm/shared';
+
+function normalizeRelativePath(libraryRoot: string, absolutePath: string): string {
+  return path.relative(libraryRoot, absolutePath).replace(/\\/g, '/');
+}
 
 import { extractAudioFeatures, hasAudioFeature, upsertAudioFeatureBatch } from './similarity.js';
 import type { AudioFeatureVectors } from './similarity.js';

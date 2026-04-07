@@ -1,16 +1,8 @@
-import path from 'node:path';
-
 const pathSeparatorPattern = /\\/g;
 const sortablePrefixPattern = /^\d+\.\s*/;
 
 export const SUPPORTED_AUDIO_EXTENSIONS = new Set(['.mp3', '.flac', '.ogg', '.wav', '.m4a']);
 export const SUPPORTED_COVER_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
-
-export function normalizeRelativePath(libraryRoot: string, absolutePath: string): string {
-  const relativePath = path.relative(libraryRoot, absolutePath);
-
-  return relativePath.replace(pathSeparatorPattern, '/');
-}
 
 export function toPosixPath(value: string): string {
   return value.replace(pathSeparatorPattern, '/');
@@ -75,11 +67,6 @@ export function parseTagNumber(value: string | number | undefined | null): numbe
   const parsed = Number.parseInt(numericPrefix, 10);
 
   return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-export function safeFileStem(relativePath: string): string {
-  const parsedPath = path.parse(relativePath);
-  return sanitizeSegment(parsedPath.name).toLowerCase();
 }
 
 export function buildCoverFileName(publicId: string, extension: string): string {

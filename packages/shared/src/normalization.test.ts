@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { compareTrackOrder, normalizeRelativePath, parseTagNumber } from './normalization.js';
+import { compareTrackOrder, parseTagNumber } from './normalization.js';
 
 describe('normalization helpers', () => {
-  it('normalizes relative paths to posix', () => {
-    expect(normalizeRelativePath('F:\\wh\\音乐', 'F:\\wh\\音乐\\Pokémon\\Disc 1\\01 Test.mp3')).toBe('Pokémon/Disc 1/01 Test.mp3');
-  });
-
   it('parses track numbers from tag values', () => {
     expect(parseTagNumber('3/24')).toBe(3);
     expect(parseTagNumber(7)).toBe(7);

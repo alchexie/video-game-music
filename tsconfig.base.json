@@ -11,9 +11,7 @@
     "noUncheckedIndexedAccess": true,
     "paths": {
       "@vgm/core": ["./packages/core/src/index.ts"],
-      "@vgm/core/*": ["./packages/core/src/*.ts"],
-      "@vgm/shared": ["./packages/shared/src/index.ts"],
-      "@vgm/shared/*": ["./packages/shared/src/*.ts"]
+      "@vgm/shared": ["./packages/shared/src/index.ts"]
     }
   }
 }
