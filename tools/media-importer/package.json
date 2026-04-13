@@ -7,7 +7,7 @@
     "init": "tsx src/index.ts init",
     "update": "tsx src/index.ts update",
     "clean": "tsx src/index.ts clean",
-    "build": "tsup",
+    "build": "rimraf dist && tsc",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run --passWithNoTests"
   },

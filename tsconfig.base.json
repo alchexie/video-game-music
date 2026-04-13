@@ -9,9 +9,5 @@
     "strict": true,
     "skipLibCheck": true,
     "noUncheckedIndexedAccess": true,
-    "paths": {
-      "@vgm/core": ["./packages/core/src/index.ts"],
-      "@vgm/shared": ["./packages/shared/src/index.ts"]
-    }
   }
 }

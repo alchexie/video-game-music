@@ -7,7 +7,7 @@
     "dev": "pnpm -r --parallel --filter @vgm/api --filter @vgm/web dev",
     "dev:web": "pnpm --filter @vgm/web dev",
     "dev:api": "pnpm --filter @vgm/api dev",
-    "build": "pnpm -r build",
+    "build": "pnpm run clean:dist && pnpm -r --sort build && node sync-dist",
     "test": "pnpm -r test",
     "test:api": "pnpm --filter @vgm/api test",
     "check": "pnpm -r typecheck",
@@ -15,12 +15,14 @@
     "import:update": "pnpm --filter @vgm/media-importer run update",
     "import:clean": "pnpm --filter @vgm/media-importer run clean",
     "sync:upload": "pnpm --filter @vgm/media-sync run upload",
-    "sync:prune": "pnpm --filter @vgm/media-sync run prune"
+    "sync:prune": "pnpm --filter @vgm/media-sync run prune",
+    "clean:dist": "rimraf --glob \"**/dist\"",
+    "clean:deps": "rimraf --glob \"**/node_modules\" pnpm-lock.yaml || true"
   },
   "devDependencies": {
     "@types/mime-types": "^3.0.1",
     "@types/node": "^24.0.10",
-    "tsup": "^8.5.0",
+    "rimraf": "^6.1.2",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"

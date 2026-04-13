@@ -6,7 +6,7 @@
   "scripts": {
     "upload": "tsx src/index.ts upload",
     "prune": "tsx src/index.ts prune",
-    "build": "tsup",
+    "build": "rimraf dist && tsc",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run --passWithNoTests"
   },
