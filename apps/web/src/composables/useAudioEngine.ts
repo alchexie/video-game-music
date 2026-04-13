@@ -9,7 +9,7 @@ export function useAudioEngine() {
   const isMuted = ref(false)
   const embeddedCoverUrl = ref<string | undefined>()
 
-  let coverFetchSeq = 0
+  // let coverFetchSeq = 0
 
   function syncVolume() {
     if (element.value) {
