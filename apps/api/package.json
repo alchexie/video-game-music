@@ -2,10 +2,14 @@
   "name": "@vgm/api",
   "version": "0.1.0",
   "private": true,
+  "main": "index.js",
   "type": "module",
+  "engines": {
+    "node": ">=22.5"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsup",
+    "build": "rimraf dist && tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
