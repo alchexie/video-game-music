@@ -28,12 +28,12 @@ export function createStorageProvider(config: AppConfig): StorageProvider {
 }
 
 export async function resolveTrackStream(context: DatabaseContext, config: AppConfig, trackId: string): Promise<StreamResolution | null> {
-  const track = await getTrackRecordById(context, trackId);
+  const track = getTrackRecordById(context, trackId);
   if (!track) {
     return null;
   }
 
-  const asset = await getMediaAssetById(context, track.mediaAssetId);
+  const asset = getMediaAssetById(context, track.mediaAssetId);
   if (!asset) {
     return null;
   }
@@ -73,10 +73,10 @@ export async function resolveTrackEmbeddedCover(
   config: AppConfig,
   trackId: string,
 ): Promise<Buffer | null> {
-  const track = await getTrackRecordById(context, trackId);
+  const track = getTrackRecordById(context, trackId);
   if (!track) return null;
 
-  const asset = await getMediaAssetById(context, track.mediaAssetId);
+  const asset = getMediaAssetById(context, track.mediaAssetId);
   if (!asset) return null;
 
   const provider = createStorageProvider(config);
