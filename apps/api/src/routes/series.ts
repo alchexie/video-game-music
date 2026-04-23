@@ -1,6 +1,7 @@
 import {
   getDatabase,
   getSeriesDetail,
+  getCosBaseUrl,
   listSeries,
 } from '@vgm/core';
 import { NotFoundError } from '@vgm/shared';
@@ -9,6 +10,13 @@ import type { FastifyInstance } from 'fastify';
 import type { RouteContext } from './types.js';
 
 const SAFE_ID = { type: 'string' as const, pattern: '^[a-zA-Z0-9_-]+$' };
+
+function buildCoverUrl(config: RouteContext['config'], albumId: string, baseUrl: string): string {
+  if (config.mediaSource === 'cos' && config.cosBucket && config.cosRegion) {
+    return getCosBaseUrl(config.cosBucket, config.cosRegion, `covers/${albumId}.png`);
+  }
+  return `${baseUrl}/api/assets/${albumId}/cover`;
+}
 
 export async function seriesRoutes(app: FastifyInstance, { config }: RouteContext) {
   app.get('/api/series', async () => {
@@ -27,6 +35,13 @@ export async function seriesRoutes(app: FastifyInstance, { config }: RouteContex
       throw new NotFoundError('Series', id);
     }
 
-    return series;
+    const baseUrl = config.baseUrl ?? `${request.protocol}://${request.headers.host}`;
+    return {
+      ...series,
+      albums: series.albums.map((album) => ({
+        ...album,
+        coverUrl: buildCoverUrl(config, album.publicId, baseUrl),
+      })),
+    };
   });
 }

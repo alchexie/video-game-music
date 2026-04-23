@@ -592,6 +592,15 @@ async function rebuildAlbums(context: DatabaseContext, options: Pick<AppConfig, 
     while (nextCoverIndex < albumDocs.length) {
       const album = albumDocs[nextCoverIndex++]!;
       const destPath = path.join(coversDir, `${album.publicId}.png`);
+
+      // Incremental: skip if cover already exists on disk
+      try {
+        await fs.access(destPath);
+        continue;
+      } catch {
+        // cover doesn't exist yet, generate it
+      }
+
       let covered = false;
 
       if (album.sourceDirectory) {

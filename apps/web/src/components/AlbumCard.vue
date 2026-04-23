@@ -21,7 +21,7 @@ function onPlayClick(e: MouseEvent) {
     <article class="media-card">
       <div class="media-card-cover">
         <img
-          :src="`/covers/${album.publicId}.png`"
+          :src="album.coverUrl ?? `/api/assets/${album.publicId}/cover`"
           :alt="album.title"
           loading="lazy"
         />

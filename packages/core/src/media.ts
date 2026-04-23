@@ -6,6 +6,7 @@ import { getMediaAssetById, getTrackRecordById } from './catalog.js';
 import { CosStorageProvider } from './storage-cos.js';
 import { LocalStorageProvider } from './storage-local.js';
 import type { StorageProvider } from './storage.js';
+import { getCosBaseUrl } from './cos-url.js';
 
 export interface StreamResolution {
   mode: 'local' | 'redirect';
@@ -19,8 +20,6 @@ export function createStorageProvider(config: AppConfig): StorageProvider {
     return new CosStorageProvider(
       config.cosBucket ?? '',
       config.cosRegion ?? '',
-      config.cosSecretId,
-      config.cosSecretKey,
     );
   }
 
@@ -47,6 +46,12 @@ const SAFE_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 export async function resolveCoverAsset(config: AppConfig, assetId: string): Promise<StreamResolution | null> {
   if (!SAFE_ID_PATTERN.test(assetId)) {
     return null;
+  }
+
+  // COS mode: redirect to COS cover URL directly
+  if (config.mediaSource === 'cos' && config.cosBucket && config.cosRegion) {
+    const redirectUrl = getCosBaseUrl(config.cosBucket, config.cosRegion, `covers/${assetId}.png`);
+    return { mode: 'redirect', redirectUrl };
   }
 
   const coversDir = path.join(config.mediaCacheDir, 'covers');

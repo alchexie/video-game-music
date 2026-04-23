@@ -1,5 +1,6 @@
 export * from './catalog.js';
 export * from './config.js';
+export * from './cos-url.js';
 export * from './db.js';
 export * from './importer.js';
 export * from './media.js';

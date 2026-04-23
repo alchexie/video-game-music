@@ -1,6 +1,6 @@
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
-import { getDatabase, loadConfig, searchCatalog } from '@vgm/core';
+import { getDatabase, getCosBaseUrl, loadConfig, searchCatalog } from '@vgm/core';
 import type { AppError } from '@vgm/shared';
 import Fastify from 'fastify';
 
@@ -89,7 +89,17 @@ export async function createApp() {
   }, async (request) => {
     const context = await getDatabase(config);
     const { q = '' } = request.query as { q?: string };
-    return searchCatalog(context, q);
+    const result = searchCatalog(context, q);
+    const baseUrl = config.baseUrl ?? `${request.protocol}://${request.headers.host}`;
+    return {
+      ...result,
+      albums: result.albums.map((album) => ({
+        ...album,
+        coverUrl: config.mediaSource === 'cos' && config.cosBucket && config.cosRegion
+          ? getCosBaseUrl(config.cosBucket, config.cosRegion, `covers/${album.publicId}.png`)
+          : `${baseUrl}/api/assets/${album.publicId}/cover`,
+      })),
+    };
   });
 
   // --- Domain routes ---

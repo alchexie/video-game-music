@@ -7,6 +7,7 @@ import {
   resolveTrackEmbeddedCover,
   resolveTrackStream,
   searchTracks,
+  getCosBaseUrl,
 } from '@vgm/core';
 import { NotFoundError } from '@vgm/shared';
 import type { FastifyInstance } from 'fastify';
@@ -15,6 +16,13 @@ import { streamLocalFile } from '../streaming.js';
 import type { RouteContext } from './types.js';
 
 const SAFE_ID = { type: 'string' as const, pattern: '^[a-zA-Z0-9_-]+$' };
+
+function buildCoverUrl(config: RouteContext['config'], albumId: string, baseUrl: string): string {
+  if (config.mediaSource === 'cos' && config.cosBucket && config.cosRegion) {
+    return getCosBaseUrl(config.cosBucket, config.cosRegion, `covers/${albumId}.png`);
+  }
+  return `${baseUrl}/api/assets/${albumId}/cover`;
+}
 
 export async function trackRoutes(app: FastifyInstance, { config }: RouteContext) {
   app.get('/api/tracks/search', {
@@ -69,7 +77,7 @@ export async function trackRoutes(app: FastifyInstance, { config }: RouteContext
       items: result.items.map((track) => ({
         ...track,
         streamUrl: `${baseUrl}/api/tracks/${track.publicId}/stream`,
-        coverUrl: track.albumId ? `${baseUrl}/api/assets/${track.albumId}/cover` : undefined,
+        coverUrl: track.albumId ? buildCoverUrl(config, track.albumId, baseUrl) : undefined,
       })),
     };
   });

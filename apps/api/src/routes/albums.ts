@@ -4,12 +4,20 @@ import {
   listAlbums,
   searchAlbums,
 } from '@vgm/core';
+import { getCosBaseUrl } from '@vgm/core';
 import { NotFoundError } from '@vgm/shared';
 import type { FastifyInstance } from 'fastify';
 
 import type { RouteContext } from './types.js';
 
 const SAFE_ID = { type: 'string' as const, pattern: '^[a-zA-Z0-9_-]+$' };
+
+function buildCoverUrl(config: RouteContext['config'], albumId: string, baseUrl: string): string {
+  if (config.mediaSource === 'cos' && config.cosBucket && config.cosRegion) {
+    return getCosBaseUrl(config.cosBucket, config.cosRegion, `covers/${albumId}.png`);
+  }
+  return `${baseUrl}/api/assets/${albumId}/cover`;
+}
 
 export async function albumRoutes(app: FastifyInstance, { config }: RouteContext) {
   app.get('/api/albums/search', {
@@ -54,14 +62,19 @@ export async function albumRoutes(app: FastifyInstance, { config }: RouteContext
       ...result,
       items: result.items.map((album) => ({
         ...album,
-        coverUrl: `${baseUrl}/api/assets/${album.publicId}/cover`,
+        coverUrl: buildCoverUrl(config, album.publicId, baseUrl),
       })),
     };
   });
 
-  app.get('/api/albums', async () => {
+  app.get('/api/albums', async (request) => {
     const context = await getDatabase(config);
-    return listAlbums(context);
+    const albums = listAlbums(context);
+    const baseUrl = config.baseUrl ?? `${request.protocol}://${request.headers.host}`;
+    return albums.map((album) => ({
+      ...album,
+      coverUrl: buildCoverUrl(config, album.publicId, baseUrl),
+    }));
   });
 
   app.get('/api/albums/:id', {
@@ -75,7 +88,11 @@ export async function albumRoutes(app: FastifyInstance, { config }: RouteContext
       throw new NotFoundError('Album', id);
     }
 
-    return album;
+    const baseUrl = config.baseUrl ?? `${request.protocol}://${request.headers.host}`;
+    return {
+      ...album,
+      coverUrl: buildCoverUrl(config, album.publicId, baseUrl),
+    };
   });
 
   app.get('/api/albums/:id/tracks', {

@@ -14,6 +14,7 @@ export interface AlbumListItem {
   year?: number;
   trackCount: number;
   discCount: number;
+  coverUrl?: string;
 }
 
 export interface TrackListItem {

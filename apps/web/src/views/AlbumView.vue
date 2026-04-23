@@ -27,6 +27,7 @@ async function loadAlbum() {
           0,
           album.value.title,
           album.value.publicId,
+          album.value.coverUrl,
         )
       } catch {
         // 浏览器自动播放策略可能阻止刷新后的自动播放，忽略该错误
@@ -46,9 +47,7 @@ watch(() => route.params.id, () => { void loadAlbum() })
 onMounted(() => { void loadAlbum() })
 
 const coverUrl = computed(() => (
-  // `/api/assets/${album.value?.publicId}/cover`
-  //todo 临时使用前端资源
-  `/covers/${album.value?.publicId}.png`
+  album.value?.coverUrl ?? `/api/assets/${album.value?.publicId}/cover`
 ))
 </script>
 
@@ -81,6 +80,7 @@ const coverUrl = computed(() => (
             :tracks="album.tracks"
             :queue-label="album.title"
             :cover-id="album.publicId"
+            :cover-url="album.coverUrl"
             group-by-disc
           />
         </section>

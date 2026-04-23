@@ -11,10 +11,12 @@ const props = withDefaults(defineProps<{
   queueLabel?: string
   groupByDisc?: boolean
   coverId?: string
+  coverUrl?: string
 }>(), {
   queueLabel: '--',
   groupByDisc: false,
   coverId: undefined,
+  coverUrl: undefined,
 })
 
 const player = usePlayerStore()
@@ -39,7 +41,7 @@ const groups = computed(() => {
 })
 
 function playTrack(index: number) {
-  void player.playQueue(props.tracks, index, props.queueLabel, props.coverId)
+  void player.playQueue(props.tracks, index, props.queueLabel, props.coverId, props.coverUrl)
 }
 
 function isActive(track: TrackListItem) {
